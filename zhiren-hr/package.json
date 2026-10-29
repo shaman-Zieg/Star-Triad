@@ -1,0 +1,20 @@
+{
+  "name": "zhiren-hr",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Zhiren (知人): a toolkit for recruitment, talent development and organizational collaboration. Turns HR practice (STAR interviews, 9-box, 70-20-10, Six-Box, RACI, ...) into reusable tools. Runs on Node.js built-ins; Claude AI assistance is optional.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "dev": "node --watch --disable-warning=ExperimentalWarning server/index.js",
+    "reset": "node --disable-warning=ExperimentalWarning server/seed.js --reset",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/sdk": "^0.137.0"
+  }
+}

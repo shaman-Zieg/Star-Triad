@@ -1,0 +1,27 @@
+# Track only application source and project documentation at the repository root
+/*
+!/.gitignore
+!/README.md
+!/zhiren-hr/
+
+# Dependencies and local application data
+node_modules/
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Local credentials and editor settings
+.env
+.env.*
+!.env.example
+!.env.sample
+.claude/
+
+# Generated archives and logs
+*.zip
+*.log
+
+# Operating-system files
+.DS_Store
+Thumbs.db
