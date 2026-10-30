@@ -163,7 +163,7 @@ export const icon = (name, cls = '') => raw(
   `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`,
 );
 export const logo = () => raw(
-  '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#17876f"/><circle cx="16" cy="11" r="4.2" fill="#fff"/><path d="M7.5 25c1.2-5 4.6-7.6 8.5-7.6s7.3 2.6 8.5 7.6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="24.5" cy="8" r="2.2" fill="#9be8d2"/></svg>',
+  '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#3d66e0"/><circle cx="16" cy="11" r="4.2" fill="#fff"/><path d="M7.5 25c1.2-5 4.6-7.6 8.5-7.6s7.3 2.6 8.5 7.6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="24.5" cy="8" r="2.2" fill="#a9c1ff"/></svg>',
 );
 
 // ------------------------------------------------------------------ people & badges
