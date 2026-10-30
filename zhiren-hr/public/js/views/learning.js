@@ -68,7 +68,7 @@ function planBlocks(focus, courses, { editable = false } = {}) {
     ${f.actions.map((a, ai) => html`<div class="list-item">
       ${editable ? html`<input type="checkbox" data-toggle="${fi}:${ai}" ${a.done ? 'checked' : ''} aria-label="${L('完成', 'Done')}">` : ''}
       <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(TYPE[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}</div></div>
-      ${badge(a.type === '70' ? '70' : a.type === '20' ? '20' : '10', a.type === '70' ? 'brand' : a.type === '20' ? 'info' : '')}</div>`)}
+      ${badge(a.type === '70' ? '70' : a.type === '20' ? '20' : '10', a.type === '70' ? 'brand' : '')}</div>`)}
   </section>`);
 }
 
