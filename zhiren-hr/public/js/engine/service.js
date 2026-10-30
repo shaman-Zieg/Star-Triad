@@ -30,6 +30,18 @@ export function dueDate(createdAt, slaDays) {
 }
 export const isOverdue = (t, today) => t.status !== 'resolved' && dueDate(t.createdAt, TICKET_TYPES[t.type]?.sla || 3) < today;
 
+// The HR department(s), found by name so request assignment does not depend on seeded ids.
+const HR_DEPT = /人力|人事|\bHR\b|\bPeople\b|Human Resources/i;
+export const hrDepartmentIds = (departments) => departments.filter((d) => HR_DEPT.test(`${d.name || ''} ${d.nameEn || ''}`)).map((d) => d.id);
+
+// Calculators that answer the numeric side of a policy question (matched on a question or an article's title and tags).
+export const POLICY_CALCULATORS = [
+  { key: 'leave', match: /年假|年休假|annual leave|vacation|\bpto\b/i, name: ['年假天数计算器', 'Annual leave calculator'] },
+  { key: 'overtime', match: /加班|overtime/i, name: ['加班费计算器', 'Overtime pay calculator'] },
+];
+export const relatedCalculators = (text) => POLICY_CALCULATORS.filter((c) => c.match.test(String(text || '')));
+export const articleText = (a) => `${a.title} ${a.titleEn || ''} ${(a.tags || []).join(' ')}`;
+
 export const KB_CATEGORIES = {
   leave: ['假期与考勤', 'Leave & attendance'],
   pay: ['薪酬福利', 'Pay & benefits'],

@@ -81,10 +81,42 @@ export function headcountPlan({ current, growth, attrition }) {
   return { target, leavers, hires: Math.max(0, target - cur + leavers) };
 }
 
-export function enpsCalc({ promoters, passives, detractors }) {
-  const p = Number(promoters) || 0;
-  const n = Number(passives) || 0;
-  const d = Number(detractors) || 0;
-  const total = p + n + d;
-  return total ? { score: Math.round(((p - d) / total) * 100), total } : { score: null, total: 0 };
+// ------------------------------------------------------------------ figures from live records
+// Shared by the dashboard, structure analytics and the calculators so they always agree.
+
+// Trailing-12-month turnover: leavers ÷ average of opening and closing headcount.
+// Opening headcount is rebuilt as current active − joiners in the window + leavers in the window.
+export function trailingTurnover(employees, today) {
+  const from = `${parseYmd(today).getFullYear() - 1}${today.slice(4)}`;
+  const active = employees.filter((e) => e.status !== 'left');
+  const leavers = employees.filter((e) => e.status === 'left' && e.leaveDate >= from && e.leaveDate <= today);
+  const hires = employees.filter((e) => e.hireDate >= from && e.hireDate <= today).length;
+  const startHeadcount = active.length - hires + leavers.length;
+  const avg = (startHeadcount + active.length) / 2;
+  return {
+    from, leavers, hires, startHeadcount, endHeadcount: active.length,
+    voluntary: leavers.filter((e) => e.leaveType === 'voluntary').length,
+    rate: avg ? leavers.length / avg : 0,
+  };
+}
+
+export const FUNNEL_STAGES = ['applied', 'screen', 'interview', 'offer', 'hired'];
+
+// How many candidates reached each stage. A rejected candidate counts up to the stage they were
+// turned down at (`rejectedFrom`); records without it count as applied only.
+export function stageReach(candidates) {
+  const furthest = (c) => FUNNEL_STAGES.indexOf(c.stage === 'rejected' ? c.rejectedFrom || 'applied' : c.stage);
+  return FUNNEL_STAGES.map((stage, i) => ({ stage, count: candidates.filter((c) => furthest(c) >= i).length }));
+}
+
+// Stage-to-stage conversion from those counts, keyed by the earlier stage (as recruitingFunnel expects).
+export function funnelRates(candidates) {
+  const reach = stageReach(candidates);
+  return Object.fromEntries(reach.slice(0, -1).map((s, i) => [s.stage, { from: s.count, to: reach[i + 1].count, rate: s.count ? round((reach[i + 1].count / s.count) * 100, 0) : null }]));
+}
+
+// Seats still to fill on open requisitions (planned headcount minus people already hired for it).
+export function openSeats(positions, candidates) {
+  return positions.filter((p) => p.status === 'open')
+    .reduce((a, p) => a + Math.max(0, (Number(p.headcount) || 0) - candidates.filter((c) => c.positionId === p.id && c.stage === 'hired').length), 0);
 }

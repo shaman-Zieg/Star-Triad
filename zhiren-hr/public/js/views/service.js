@@ -1,34 +1,35 @@
-// Employee services: directory and profiles, service requests, policy library, HR assistant and onboarding.
+// Employee services: directory and profiles, service requests, the policy library with its HR assistant, and onboarding.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, daysBetween, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
   modal, toast, act, field, input, textarea, select, on, meter, method, getActor, nowStamp,
 } from '../core.js';
 import { L, tx, loc, lang, LOCATIONS, LEAVE_REASONS, ENROLL_STATUS, RISK_LEVEL } from '../i18n.js';
-import { TICKET_TYPES, TICKET_STATUS, dueDate, isOverdue, KB_CATEGORIES, searchKB, bestParagraph, OWNERS, PHASES, buildChecklist } from '../engine/service.js';
+import {
+  TICKET_TYPES, TICKET_STATUS, dueDate, isOverdue, KB_CATEGORIES, searchKB, bestParagraph, OWNERS, PHASES, buildChecklist, hrDepartmentIds, relatedCalculators, articleText,
+} from '../engine/service.js';
 import { COMPETENCIES, LEVELS, targetProfile } from '../engine/competency.js';
 import { BOXES, boxKey, flightRisk, PERF_SCALE } from '../engine/talent.js';
 import { idpProgress } from '../engine/learning.js';
 import { radar } from '../charts.js';
-import { md } from '../md.js';
+import { md, mdToHtml } from '../md.js';
 import { aiEnabled, streamAI } from '../ai.js';
-import { mdToHtml } from '../md.js';
 import { reloadEmployees } from '../app.js';
 
 const SUBS = [
   ['people', ['员工档案', 'Directory']],
   ['requests', ['服务申请', 'Requests']],
-  ['kb', ['制度百科', 'Policy library']],
-  ['assistant', ['HR 智能助手', 'HR assistant']],
+  ['kb', ['制度百科与问答', 'Policies & Q&A']],
   ['onboarding', ['入职管理', 'Onboarding']],
 ];
 
 export default async function service(el, ctx) {
-  const sub = SUBS.some(([k]) => k === ctx.sub) ? ctx.sub : 'people';
+  // The HR assistant now lives in the policy library; keep its old links working.
+  const sub = ctx.sub === 'assistant' ? 'kb' : SUBS.some(([k]) => k === ctx.sub) ? ctx.sub : 'people';
   setHTML(el, html`${pageHead(L('员工服务', 'Employee services'), L('让员工自助获取信息、提交申请，让 HR 把时间花在更有价值的事情上。', 'Self-service answers and requests for employees, so HR can spend time where it matters.'))}
     ${tabs(SUBS.map(([k, n]) => [k, tx(n)]), sub, (k) => `#/service/${k}`)}`);
   const body = document.createElement('div');
   el.appendChild(body);
-  await ({ people: peopleView, requests: requestsView, kb: kbView, assistant: assistantView, onboarding: onboardingView })[sub](body, ctx);
+  await ({ people: peopleView, requests: requestsView, kb: kbView, onboarding: onboardingView })[sub](body, ctx);
 }
 
 const typeBadge = (t) => badge(tx(TICKET_TYPES[t]?.name || [t, t]));
@@ -55,7 +56,7 @@ function employeeForm(e, d, onSaved) {
       ${field(L('离职日期', 'Leave date'), input('leaveDate', { type: 'date', value: e.leaveDate }))}
       ${field(L('离职原因', 'Leave reason'), select('leaveReason', Object.entries(LEAVE_REASONS).map(([k, v]) => [k, tx(v)]), { value: e.leaveReason, placeholder: '—' }))}
       ${field(L('薪酬比较比率', 'Compa-ratio'), input('compaRatio', { type: 'number', step: 0.01, min: 0.5, max: 1.5, value: e.compaRatio ?? 1 }), { hint: L('实际薪酬 ÷ 薪级中位值', 'Pay ÷ band midpoint') })}
-      ${field(L('敬业度（1-5）', 'Engagement (1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: e.engagement ?? 4 }))}
+      ${field(L('敬业度（上级评估，1-5）', 'Engagement (manager rating, 1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: e.engagement ?? 4 }), { hint: L('用于流失风险评估；不来自匿名调研，调研从不记录个人答卷', 'Feeds the flight-risk score. Not taken from the anonymous surveys, which never record who answered') })}
     </div>`,
     onSubmit: async (v) => {
       if (!v.name.trim() || !v.title.trim()) throw new Error(L('请填写姓名和职位', 'Name and job title are required'));
@@ -175,7 +176,7 @@ function newRequest(prefill = {}, onSaved) {
 }
 
 async function requestsView(el, ctx) {
-  const d = await load('tickets', 'employees');
+  const d = await load('tickets', 'employees', 'departments');
   const emp = byId(d.employees);
   const T = today();
   if (ctx.id) return ticketDetail(el, ctx, d, emp);
@@ -212,7 +213,11 @@ async function ticketDetail(el, ctx, d, emp) {
   if (!t) return setHTML(el, empty(L('申请不存在', 'Request not found'), '', 'alert'));
   const T = today();
   const due = dueDate(t.createdAt, TICKET_TYPES[t.type]?.sla || 3);
-  const hr = d.employees.filter((x) => x.deptId === 'd08' && x.status !== 'left');
+  const active = d.employees.filter((x) => x.status !== 'left');
+  const hrDepts = new Set(hrDepartmentIds(d.departments));
+  const hrStaff = active.filter((x) => hrDepts.has(x.deptId));
+  // Fall back to everyone if no department looks like HR, and keep the current owner selectable.
+  const hr = [...(hrStaff.length ? hrStaff : active), ...(emp[t.assigneeId] && !hrStaff.includes(emp[t.assigneeId]) ? [emp[t.assigneeId]] : [])];
   setHTML(el, html`
     <a href="#/service/requests" class="small">← ${L('全部申请', 'All requests')}</a>
     <div class="split" style="margin-top:8px">
@@ -227,7 +232,7 @@ async function ticketDetail(el, ctx, d, emp) {
           ${field(L('处理人', 'Owner'), select('assignee', hr.map((x) => [x.id, personName(x)]), { value: t.assigneeId, placeholder: L('未分配', 'Unassigned'), id: 'assignee' }))}
           ${field(L('状态', 'Status'), select('status', Object.entries(TICKET_STATUS).map(([k, v]) => [k, tx(v.name)]), { value: t.status, id: 'status' }))}
         </div>
-        <div style="margin-top:12px">${method(L('提示：', 'Tip:'), L('常见问题可沉淀到制度百科，让 HR 助手自动回答。', 'Turn frequent questions into policy articles so the HR assistant can answer them.'))}</div></section>
+        <div style="margin-top:12px">${method(L('提示：', 'Tip:'), L('常见问题可沉淀到制度百科，让其中的 HR 助手自动回答。', 'Turn frequent questions into policy articles so the assistant there can answer them.'))}</div></section>
     </div>`);
   const save = (patch, msg) => act(null, () => api.put(`/api/tickets/${t.id}`, patch), msg).then(() => ctx.rerender());
   el.querySelector('#assignee').addEventListener('change', (e) => save({ assigneeId: e.target.value || null, ...(t.status === 'open' && e.target.value && { status: 'in_progress' }) }, L('已分配', 'Assigned')));
@@ -272,60 +277,64 @@ function articleForm(a, onSaved) {
   });
 }
 
+// The conversation survives navigating away and back (not a reload).
+const chatLog = [];
 async function kbView(el, ctx) {
   const d = await load('kb');
   if (ctx.id) {
     const a = d.kb.find((x) => x.id === ctx.id);
     if (!a) return setHTML(el, empty(L('文章不存在', 'Article not found'), '', 'alert'));
-    setHTML(el, html`<a href="#/service/kb" class="small">← ${L('制度百科', 'Policy library')}</a>
+    const calcs = relatedCalculators(articleText(a));
+    setHTML(el, html`<a href="#/service/kb" class="small">← ${L('制度百科与问答', 'Policies & Q&A')}</a>
       <div class="split" style="margin-top:8px"><section class="card"><div class="card-head"><div><h2 style="font-size:19px">${loc(a, 'title')}</h2><p>${tx(KB_CATEGORIES[a.category] || ['', ''])} · ${L('更新于', 'Updated')} ${fmt.date(a.updatedAt)}</p></div><button class="btn btn-sm" type="button" data-edit>${icon('edit')}${L('编辑', 'Edit')}</button></div>
         ${md(lang() === 'en' ? a.bodyEn : a.body)}
         <div style="margin-top:12px">${(a.tags || []).map((t) => html`<span class="tag">${t}</span>`)}</div></section>
-        <section class="card"><div class="card-head"><h2>${L('没找到答案？', 'Still have a question?')}</h2></div>
-          <p class="small">${L('可以问问 HR 助手，或直接发起服务申请。', 'Ask the HR assistant, or open a request.')}</p>
-          <div class="row"><a class="btn" href="#/service/assistant">${icon('sparkle')}${L('问 HR 助手', 'Ask the assistant')}</a><button class="btn" type="button" data-req>${L('发起申请', 'Open a request')}</button></div>
-          ${callout('info', L('示例制度依据国家层面规定编写，实际执行请以当地法规和公司制度为准。', 'Sample policies follow national PRC rules; local regulations and company policy take precedence.'))}</section></div>`);
+        <div class="stack">
+          ${calcs.length ? html`<section class="card"><div class="card-head"><div><h2>${L('算一算', 'Work it out')}</h2><p>${L('按本制度的规则计算具体数字', 'Get the number under these rules')}</p></div></div><div class="row">${calcs.map((c) => html`<a class="btn" href="#/toolkit/${c.key}">${icon('calc')}${tx(c.name)}</a>`)}</div></section>` : ''}
+          <section class="card"><div class="card-head"><h2>${L('没找到答案？', 'Still have a question?')}</h2></div>
+            <p class="small">${L('可以直接提问，或发起服务申请交给 HR。', 'Ask a question, or open a request for HR.')}</p>
+            <div class="row"><a class="btn" href="#/service/kb">${icon('sparkle')}${L('去提问', 'Ask a question')}</a><button class="btn" type="button" data-req>${L('发起申请', 'Open a request')}</button></div>
+            ${callout('info', L('示例制度依据国家层面规定编写，实际执行请以当地法规和公司制度为准。', 'Sample policies follow national PRC rules; local regulations and company policy take precedence.'))}</section>
+        </div></div>`);
     on(el, 'click', '[data-edit]', () => articleForm(a, () => ctx.rerender()));
     on(el, 'click', '[data-req]', () => newRequest({ title: loc(a, 'title') }));
     return;
   }
   const cat = ctx.query.cat || '';
-  const q = ctx.query.q || '';
-  let rows = d.kb.filter((a) => !cat || a.category === cat);
-  if (q) rows = searchKB(rows, q).map((r) => r.article);
-  setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
-      <div class="row"><input class="input" type="search" id="q" value="${q}" placeholder="${L('搜索制度，如"年假""加班费"', 'Search, e.g. "annual leave", "overtime"')}" style="width:260px">
-        <div class="seg"><button type="button" class="${!cat ? 'on' : ''}" data-cat="">${L('全部', 'All')}</button>${Object.entries(KB_CATEGORIES).map(([k, v]) => html`<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${tx(v)}</button>`)}</div></div>
-      <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建文章', 'New article')}</button></div>
-    <div class="grid cols-3">${rows.map((a) => html`<a class="card tool-card" href="#/service/kb/${a.id}"><span class="badge" style="width:max-content">${tx(KB_CATEGORIES[a.category] || ['', ''])}</span><strong>${loc(a, 'title')}</strong><p>${(lang() === 'en' ? a.bodyEn : a.body).slice(0, 80).replace(/\n/g, ' ')}…</p></a>`)}</div>
-    ${rows.length ? '' : empty(L('没有找到相关制度', 'No matching policies'), L('换个关键词，或问问 HR 助手。', 'Try other words, or ask the HR assistant.'), 'search')}`);
-  let t;
-  el.querySelector('#q').addEventListener('input', (e) => {
-    clearTimeout(t);
-    t = setTimeout(() => { location.hash = `#/service/kb?${new URLSearchParams({ ...(cat && { cat }), ...(e.target.value && { q: e.target.value }) })}`; }, 400);
-  });
-  on(el, 'click', '[data-cat]', (e, b) => { location.hash = `#/service/kb${b.dataset.cat ? `?cat=${b.dataset.cat}` : ''}`; });
-  on(el, 'click', '[data-new]', () => articleForm({ category: 'daily' }, (s) => { location.hash = `#/service/kb/${s.id}`; }));
-}
-
-// ------------------------------------------------------------------ HR assistant
-const history = [];
-async function assistantView(el) {
-  const d = await load('kb');
   const SUGGEST = [L('我今年有几天年假？', 'How many days of annual leave do I get?'), L('加班费怎么计算？', 'How is overtime pay calculated?'), L('试用期最长多久？', 'How long can probation be?'), L('怎么开在职证明？', 'How do I get an employment letter?'), L('离职要提前多久通知？', 'How much notice do I need to give?'), L('产假有多少天？', 'How long is maternity leave?')];
+  // One box does both jobs: typing filters the articles below, Enter asks the assistant.
   setHTML(el, html`
-    <div class="split">
-      <section class="card">
-        <div class="card-head"><div><h2>${L('HR 智能助手', 'HR assistant')}</h2><p>${aiEnabled() ? L('由 Claude 基于公司制度百科回答，并标注依据', 'Claude answers from the policy library and cites its sources') : L('基于制度百科检索回答（配置 AI 后可获得更自然的回答）', 'Answers by searching the policy library (configure AI for conversational answers)')}</p></div>${badge(aiEnabled() ? 'AI' : L('检索模式', 'Search mode'), aiEnabled() ? 'info' : '')}</div>
-        <div class="chat" id="chat" aria-live="polite">${history.length ? '' : html`<div class="msg bot">${L('你好！我可以回答假期、薪酬社保、合同、绩效与日常办事等问题。', 'Hi! Ask me about leave, pay and benefits, contracts, performance or everyday HR services.')}</div>`}</div>
-        <form id="ask" class="row" style="margin-top:12px"><input class="input" name="q" placeholder="${L('输入你的问题…', 'Type your question…')}" style="flex:1" maxlength="500" autocomplete="off"><button class="btn btn-primary" type="submit">${icon('send')}${L('发送', 'Send')}</button></form>
-        <div class="chips-input" style="margin-top:10px">${SUGGEST.map((s) => html`<button type="button" class="chip-toggle" data-q="${s}">${s}</button>`)}</div>
-      </section>
-      <section class="card"><div class="card-head"><h2>${L('它是怎么工作的', 'How it works')}</h2></div>
-        <ol class="small" style="padding-left:18px;margin:0"><li>${L('将问题切分为关键词，在制度百科中检索最相关的文章', 'Splits the question into keywords and finds the most relevant articles')}</li><li>${L('给出最相关的条款原文与出处链接', 'Shows the most relevant passage with a link to the source')}</li><li>${L('启用 AI 后，由 Claude 仅依据检索到的制度组织答案，不编造规定', 'With AI on, Claude composes an answer only from the retrieved policies')}</li><li>${L('找不到答案时，一键转为服务申请交给 HR', 'When nothing matches, turn the question into a request for HR in one click')}</li></ol></section>
-    </div>`);
+    <section class="card" style="margin-bottom:16px">
+      <div class="card-head"><div><h2>${L('搜索制度或直接提问', 'Search the policies or ask a question')}</h2><p>${aiEnabled()
+        ? L('输入关键词即时筛选下方文章；按回车或“提问”，由 Claude 仅依据检索到的制度作答并标注出处，不编造规定。', 'Typing filters the articles below. Press Enter or Ask and Claude answers only from the matching policies, citing them.')
+        : L('输入关键词即时筛选下方文章；按回车或“提问”，给出最相关的条款原文与出处（配置 AI 后可获得更自然的回答）。', 'Typing filters the articles below. Press Enter or Ask for the most relevant passage and its source (configure AI for conversational answers).')}</p></div>${badge(aiEnabled() ? 'AI' : L('检索模式', 'Search mode'), aiEnabled() ? 'info' : '')}</div>
+      <form id="ask" class="row"><input class="input" type="search" name="q" value="${ctx.query.q || ''}" placeholder="${L('如：年假怎么算、加班费、试用期', 'e.g. annual leave, overtime pay, probation')}" style="flex:1" maxlength="500" autocomplete="off" aria-label="${L('搜索制度或提问', 'Search or ask')}"><button class="btn btn-primary" type="submit">${icon('send')}${L('提问', 'Ask')}</button></form>
+      <div class="chips-input" style="margin-top:10px">${SUGGEST.map((s) => html`<button type="button" class="chip-toggle" data-q="${s}">${s}</button>`)}</div>
+      <div class="chat" id="chat" aria-live="polite" style="margin-top:12px" ${chatLog.length ? '' : 'hidden'}></div>
+      <div class="row" id="chat-foot" style="margin-top:8px" ${chatLog.length ? '' : 'hidden'}><span class="small muted grow">${L('找不到答案时，可一键转为服务申请交给 HR。', 'When nothing matches, turn the question into a request for HR in one click.')}</span><button class="btn btn-sm" type="button" data-clear>${L('清空对话', 'Clear conversation')}</button></div>
+    </section>
+    <div class="row-between" style="margin-bottom:12px">
+      <div class="seg"><button type="button" class="${!cat ? 'on' : ''}" data-cat="">${L('全部', 'All')}</button>${Object.entries(KB_CATEGORIES).map(([k, v]) => html`<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${tx(v)}</button>`)}</div>
+      <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建文章', 'New article')}</button></div>
+    <div id="kb-list"></div>`);
+
+  const box = el.querySelector('#ask').q;
+  const listEl = el.querySelector('#kb-list');
+  const drawList = (q) => {
+    let rows = d.kb.filter((a) => !cat || a.category === cat);
+    if (q.trim()) rows = searchKB(rows, q).map((r) => r.article);
+    setHTML(listEl, html`<div class="grid cols-3">${rows.map((a) => html`<a class="card tool-card" href="#/service/kb/${a.id}"><span class="badge" style="width:max-content">${tx(KB_CATEGORIES[a.category] || ['', ''])}</span><strong>${loc(a, 'title')}</strong><p>${(lang() === 'en' ? a.bodyEn : a.body).slice(0, 80).replace(/\n/g, ' ')}…</p></a>`)}</div>
+      ${rows.length ? '' : empty(L('没有找到相关制度', 'No matching policies'), L('换个关键词，或按回车提问。', 'Try other words, or press Enter to ask.'), 'search')}`);
+  };
+  // Keep the filter in the address without re-rendering (which would lose focus and the conversation).
+  const syncUrl = (q) => {
+    const qs = new URLSearchParams({ ...(cat && { cat }), ...(q.trim() && { q: q.trim() }) }).toString();
+    history.replaceState(null, '', `#/service/kb${qs ? `?${qs}` : ''}`);
+  };
+  drawList(box.value);
+
   const chat = el.querySelector('#chat');
+  const foot = el.querySelector('#chat-foot');
   const push = (role, content) => {
     const div = document.createElement('div');
     div.className = `msg ${role}`;
@@ -334,19 +343,23 @@ async function assistantView(el) {
     chat.scrollTop = chat.scrollHeight;
     return div;
   };
-  for (const h of history) push(h.role, h.content);
+  for (const h of chatLog) push(h.role, h.content);
   const ask = async (q) => {
     if (!q.trim()) return;
+    chat.hidden = false;
+    foot.hidden = false;
     push('me', html`${q}`);
-    history.push({ role: 'me', content: html`${q}` });
+    chatLog.push({ role: 'me', content: html`${q}` });
     const hits = searchKB(d.kb, q).slice(0, 3);
     const sources = hits.length ? html`<div class="src">${L('依据：', 'Sources: ')}${hits.map((h, i) => html`${i ? '、' : ''}<a href="#/service/kb/${h.article.id}">${loc(h.article, 'title')}</a>`)}</div>` : '';
+    const calcs = relatedCalculators(`${q} ${hits[0] ? articleText(hits[0].article) : ''}`);
+    const calcLinks = calcs.length ? html`<div class="src">${L('算一算：', 'Work it out: ')}${calcs.map((c, i) => html`${i ? '、' : ''}<a href="#/toolkit/${c.key}">${tx(c.name)}</a>`)}</div>` : '';
     const fallback = hits.length
-      ? html`${md(bestParagraph(hits[0].article, q, lang()))}${sources}`
+      ? html`${md(bestParagraph(hits[0].article, q, lang()))}${sources}${calcLinks}`
       : html`${L('制度百科中暂时没有找到相关内容。', 'I could not find this in the policy library.')} <button class="btn btn-sm" type="button" data-ticket="${q}">${L('转给 HR 处理', 'Ask HR')}</button>`;
     if (!aiEnabled() || !hits.length) {
       push('bot', fallback);
-      history.push({ role: 'bot', content: fallback });
+      chatLog.push({ role: 'bot', content: fallback });
       return;
     }
     const div = push('bot', html`<span class="ai-cursor">${L('思考中…', 'Thinking…')}</span>`);
@@ -355,23 +368,49 @@ async function assistantView(el) {
         div.innerHTML = `<div class="md ai-cursor">${mdToHtml(text)}</div>`;
         chat.scrollTop = chat.scrollHeight;
       });
-      const content = html`${md(r.text)}${sources}`;
+      const content = html`${md(r.text)}${sources}${calcLinks}`;
       setHTML(div, content);
-      history.push({ role: 'bot', content });
+      chatLog.push({ role: 'bot', content });
     } catch (err) {
       setHTML(div, fallback);
-      history.push({ role: 'bot', content: fallback });
+      chatLog.push({ role: 'bot', content: fallback });
       toast(err.message, 'error');
     }
   };
+
+  let t;
+  const filterNow = () => {
+    clearTimeout(t);
+    drawList(box.value);
+    syncUrl(box.value);
+  };
+  box.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(filterNow, 200);
+  });
   el.querySelector('#ask').addEventListener('submit', (e) => {
     e.preventDefault();
-    const q = e.target.q.value;
-    e.target.q.value = '';
-    ask(q);
+    filterNow();
+    ask(box.value);
+    box.select();
   });
-  on(el, 'click', '[data-q]', (e, b) => ask(b.dataset.q));
+  on(el, 'click', '[data-q]', (e, b) => {
+    box.value = b.dataset.q;
+    filterNow();
+    ask(box.value);
+  });
+  on(el, 'click', '[data-clear]', () => {
+    chatLog.length = 0;
+    chat.replaceChildren();
+    chat.hidden = true;
+    foot.hidden = true;
+  });
   on(el, 'click', '[data-ticket]', (e, b) => newRequest({ title: b.dataset.ticket.slice(0, 120), detail: b.dataset.ticket }));
+  on(el, 'click', '[data-cat]', (e, b) => {
+    const qs = new URLSearchParams({ ...(b.dataset.cat && { cat: b.dataset.cat }), ...(box.value.trim() && { q: box.value.trim() }) }).toString();
+    location.hash = `#/service/kb${qs ? `?${qs}` : ''}`;
+  });
+  on(el, 'click', '[data-new]', () => articleForm({ category: 'daily' }, (s) => { location.hash = `#/service/kb/${s.id}`; }));
 }
 
 // ------------------------------------------------------------------ onboarding
@@ -401,15 +440,22 @@ async function onboardingView(el, ctx) {
     });
     return;
   }
+  // Hiring in Recruitment creates plans automatically, so the list leads with the ones still running.
+  const f = ctx.query.f || 'active';
+  const complete = (ob) => ob.tasks.every((t) => t.done);
+  const plans = d.onboarding.filter((ob) => f === 'all' || (f === 'done') === complete(ob)).sort((a, b) => b.startDate.localeCompare(a.startDate));
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">${method(L('30-60-90 天融入：', '30-60-90 day onboarding:'), L('清单按入职前、第一天、第一周、30/60/90 天分阶段，分别指派给 HR、上级、IT、导师和新员工本人。', 'Checklists run from before day one to 90 days, with tasks for HR, the manager, IT, the buddy and the new hire.'))}
+    ${method(L('30-60-90 天融入：', '30-60-90 day onboarding:'), L('清单按入职前、第一天、第一周、30/60/90 天分阶段，分别指派给 HR、上级、IT、导师和新员工本人。在“智能招聘”中录用候选人时会自动生成计划。', 'Checklists run from before day one to 90 days, with tasks for HR, the manager, IT, the buddy and the new hire. Hiring a candidate in Recruitment creates the plan automatically.'))}
+    <div class="row-between" style="margin:12px 0">
+      <div class="seg">${[['active', L('进行中', 'In progress'), d.onboarding.filter((ob) => !complete(ob)).length], ['done', L('已完成', 'Completed'), d.onboarding.filter(complete).length], ['all', L('全部', 'All'), d.onboarding.length]].map(([k, n, c]) => html`<button type="button" class="${f === k ? 'on' : ''}" data-f="${k}">${n} ${c}</button>`)}</div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建入职计划', 'New plan')}</button></div>
-    <section class="card card-flush">${d.onboarding.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('新员工', 'New hire')}</th><th>${L('入职日期', 'Start')}</th><th>${L('进度', 'Progress')}</th><th>${L('逾期任务', 'Overdue')}</th></tr></thead>
-      <tbody>${d.onboarding.map((ob) => {
+    <section class="card card-flush">${plans.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('新员工', 'New hire')}</th><th>${L('入职日期', 'Start')}</th><th>${L('进度', 'Progress')}</th><th>${L('逾期任务', 'Overdue')}</th></tr></thead>
+      <tbody>${plans.map((ob) => {
         const done = ob.tasks.filter((t) => t.done).length;
         const late = ob.tasks.filter((t) => !t.done && t.due < T).length;
         return html`<tr class="clickable" data-href="#/service/onboarding/${ob.id}"><td>${personLink(emp[ob.employeeId])}</td><td>${fmt.date(ob.startDate)}</td><td style="min-width:160px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${meter(done, ob.tasks.length, 'ok')}</div><span class="small">${done}/${ob.tasks.length}</span></div></td><td>${late ? badge(late, 'danger') : badge(0, 'ok')}</td></tr>`;
-      })}</tbody></table></div>` : empty(L('还没有入职计划', 'No onboarding plans'), '', 'user')}</section>`);
+      })}</tbody></table></div>` : empty(d.onboarding.length ? L('没有符合条件的入职计划', 'No plans in this view') : L('还没有入职计划', 'No onboarding plans'), '', 'user')}</section>`);
+  on(el, 'click', '[data-f]', (e, b) => { location.hash = `#/service/onboarding${b.dataset.f === 'active' ? '' : `?f=${b.dataset.f}`}`; });
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
   on(el, 'click', '[data-new]', () => modal({
     title: L('新建入职计划', 'New onboarding plan'),
