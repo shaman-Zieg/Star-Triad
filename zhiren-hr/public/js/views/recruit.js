@@ -12,6 +12,7 @@ import { generateJD, checkInclusive, detectFamily, FAMILIES } from '../engine/jd
 import { planInterview, STAR_PROBES, ROUNDS, RECOMMENDATIONS, aggregateScorecards, DECISIONS } from '../engine/interview.js';
 import { compByKey, LEVELS, targetProfile } from '../engine/competency.js';
 import { buildChecklist } from '../engine/service.js';
+import { stageReach } from '../engine/calc.js';
 import { mountReport } from '../ai.js';
 import { md } from '../md.js';
 import { hbars } from '../charts.js';
@@ -134,7 +135,7 @@ async function positionDetail(el, ctx, d) {
   if (!p) return setHTML(el, empty(L('职位不存在', 'Job not found'), '', 'alert'));
   const cands = d.candidates.filter((c) => c.positionId === p.id).map((c) => ({ c, ...analyze(c, p) })).sort((a, b) => b.match.score - a.match.score);
   const active = cands.filter((x) => !['rejected', 'hired'].includes(x.c.stage));
-  const funnel = ['applied', 'screen', 'interview', 'offer', 'hired'].map((s, i) => ({ label: tx(STAGES[s]), value: cands.filter((x) => ['applied', 'screen', 'interview', 'offer', 'hired'].indexOf(x.c.stage) >= i || (i === 0 && x.c.stage === 'rejected')).length, cls: `seq-${i + 1}` }));
+  const funnel = stageReach(cands.map((x) => x.c)).map((s, i) => ({ label: tx(STAGES[s.stage]), value: s.count, cls: `seq-${i + 1}` }));
   const mgr = d.employees.find((e) => e.id === p.hiringManagerId);
   const jdText = p.jd || generateJD({ ...p, title: loc(p, 'title'), dept: deptName(d, p.deptId), location: tx(LOCATIONS[p.location] || ['', '']) }, lang());
   setHTML(el, html`
@@ -272,6 +273,8 @@ async function moveStage(c, stage, d) {
   const patch = { stage, stageChangedAt: today() };
   if (stage === 'hired' && c.offer) patch.offer = { ...c.offer, status: 'accepted' };
   if (stage === 'rejected') {
+    // Remember where they dropped out so the hiring funnel counts the stages they did reach.
+    if (c.stage !== 'rejected') patch.rejectedFrom = c.stage === 'hired' ? 'offer' : c.stage;
     const ok = await new Promise((resolve) => {
       modal({
         title: L('标记为未通过', 'Mark as not selected'),

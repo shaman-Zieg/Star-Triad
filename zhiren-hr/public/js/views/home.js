@@ -7,6 +7,7 @@ import { evaluateAll } from '../engine/succession.js';
 import { isOverdue } from '../engine/service.js';
 import { learningStats } from '../engine/learning.js';
 import { scoreSurvey } from '../engine/diagnosis.js';
+import { trailingTurnover, stageReach } from '../engine/calc.js';
 import { parseYmd } from '../engine/text.js';
 
 const COL_NAMES = {
@@ -38,12 +39,9 @@ export default async function home(el) {
   const active = d.employees.filter((e) => e.status !== 'left');
   const me = emp[getActor()];
 
-  // Turnover over the trailing 12 months.
-  const yearAgo = `${parseYmd(T).getFullYear() - 1}${T.slice(4)}`;
-  const leavers = d.employees.filter((e) => e.status === 'left' && e.leaveDate >= yearAgo && e.leaveDate <= T);
-  const hires12 = d.employees.filter((e) => e.hireDate >= yearAgo && e.hireDate <= T).length;
-  const startHC = active.length - hires12 + leavers.length;
-  const turnover = leavers.length / ((startHC + active.length) / 2 || 1);
+  // Turnover over the trailing 12 months (same basis as structure analytics and the turnover calculator).
+  const tt = trailingTurnover(d.employees, T);
+  const { leavers, startHeadcount: startHC, rate: turnover } = tt;
   const newThisMonth = active.filter((e) => e.hireDate.slice(0, 7) === T.slice(0, 7)).length;
 
   const open = d.positions.filter((p) => p.status === 'open');
@@ -79,7 +77,7 @@ export default async function home(el) {
   if (pulse?.status === 'open') alerts.push({ tone: 'brand', href: `#/org/diagnosis/${pulse.id}`, text: L(`「${pulse.title}」进行中，已回收 ${enps?.n ?? 0} 份`, `"${pulse.titleEn}" is open with ${enps?.n ?? 0} responses`) });
 
   // Charts.
-  const stageCounts = ['applied', 'screen', 'interview', 'offer', 'hired'].map((s, i) => ({ label: tx(STAGES[s]), value: d.candidates.filter((c) => (['applied', 'screen', 'interview', 'offer', 'hired'].indexOf(c.stage) >= i) || (c.stage === 'rejected' && i === 0)).length, cls: `seq-${i + 1}` }));
+  const stageCounts = stageReach(d.candidates).map((s, i) => ({ label: tx(STAGES[s.stage]), value: s.count, cls: `seq-${i + 1}` }));
   const byDept = d.departments.map((dep) => ({ label: loc(dep), value: active.filter((e) => e.deptId === dep.id).length })).sort((a, b) => b.value - a.value);
   const months = Array.from({ length: 6 }, (_, i) => {
     const dt = parseYmd(T);
@@ -117,7 +115,7 @@ export default async function home(el) {
     <div class="grid cols-4">
       ${kpi(L('在职人数', 'Headcount'), active.length, L(`本月新入职 ${newThisMonth} 人 · ${d.departments.length} 个部门`, `${newThisMonth} joined this month · ${d.departments.length} departments`), '#/org/structure', 'users')}
       ${kpi(L('招聘需求', 'Open roles'), html`${open.length}<small>${L(`个职位 / ${toHire} 人`, `jobs / ${toHire} hires`)}</small>`, L(`管道中 ${inFlight.length} 位候选人${timeToHire ? ` · 平均招聘周期 ${timeToHire} 天` : ''}`, `${inFlight.length} candidates in process${timeToHire ? ` · ${timeToHire} days to hire` : ''}`), '#/recruit/positions', 'briefcase')}
-      ${kpi(L('年化离职率', 'Annual turnover'), fmt.pct(turnover, 1), L(`近 12 个月离职 ${leavers.length} 人，主动离职 ${leavers.filter((e) => e.leaveType === 'voluntary').length} 人`, `${leavers.length} leavers in 12 months, ${leavers.filter((e) => e.leaveType === 'voluntary').length} voluntary`), '#/org/structure', 'route')}
+      ${kpi(L('年化离职率', 'Annual turnover'), fmt.pct(turnover, 1), L(`近 12 个月离职 ${leavers.length} 人，主动离职 ${tt.voluntary} 人`, `${leavers.length} leavers in 12 months, ${tt.voluntary} voluntary`), '#/org/structure', 'route')}
       ${kpi(L('员工净推荐值', 'eNPS'), enps ? (enps.score > 0 ? `+${enps.score}` : enps.score) : '—', pulse ? L(`来自「${pulse.title}」· ${enps?.n ?? 0} 份`, `From "${pulse.titleEn}" · ${enps?.n ?? 0} responses`) : L('尚无敬业度调研', 'No engagement survey yet'), pulse ? `#/org/diagnosis/${pulse.id}` : '#/org/diagnosis', 'heart')}
       ${kpi(L('高潜人才占比', 'High potentials'), active.length ? fmt.pct(hipo / active.length, 0) : '—', L(`${hipo} 人 · 核心人才 ${boxes.star} 人 · 需关注 ${boxes.risk} 人`, `${hipo} people · ${boxes.star} key talent · ${boxes.risk} need attention`), '#/talent/ninebox', 'star')}
       ${kpi(L('培训完成率', 'Training completion'), ls.enrollments ? fmt.pct(ls.completionRate, 0) : '—', L(`人均学时 ${ls.hoursPerHead} 小时 · 满意度 ${ls.satisfaction ?? '—'}`, `${ls.hoursPerHead} hours per head · satisfaction ${ls.satisfaction ?? '—'}`), '#/learning/courses', 'book')}
@@ -159,7 +157,7 @@ export default async function home(el) {
           ['#/learning/idp', 'target', L('个人发展计划', 'Development plans'), L('按 70-20-10 自动生成 IDP', 'Generate 70-20-10 IDPs')],
           ['#/org/diagnosis', 'pulse', L('组织诊断', 'Organizational diagnosis'), L('六盒、7S、敬业度、团队效能', 'Six-Box, 7S, engagement, team health')],
           ['#/org/raci', 'layers', L('RACI 协作矩阵', 'RACI matrix'), L('理清跨部门分工并自动检查', 'Clarify cross-team roles, auto-checked')],
-          ['#/service/assistant', 'sparkle', L('HR 智能助手', 'HR assistant'), L('基于制度百科回答员工问题', 'Answers from the policy library')],
+          ['#/service/kb', 'sparkle', L('HR 智能助手', 'HR assistant'), L('基于制度百科回答员工问题', 'Answers from the policy library')],
         ].map(([href, ic, t, p]) => html`<a class="card tool-card" href="${href}"><span class="ico">${icon(ic)}</span><strong>${t}</strong><p>${p}</p></a>`)}
       </div>
     </section>

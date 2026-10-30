@@ -242,6 +242,12 @@ export function formValues(form) {
 }
 export const list = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
 
+// ------------------------------------------------------------------ unsaved changes
+// A view registers a check that returns true while it holds unsaved edits; the shell asks before leaving.
+let leaveGuard = null;
+export const setLeaveGuard = (fn) => { leaveGuard = fn; };
+export const hasUnsavedChanges = () => Boolean(leaveGuard?.());
+
 // ------------------------------------------------------------------ events
 export function on(root, event, selector, handler) {
   root.addEventListener(event, (e) => {

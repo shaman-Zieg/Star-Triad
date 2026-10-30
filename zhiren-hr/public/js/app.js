@@ -1,5 +1,5 @@
 // App shell: navigation, routing, global search, acting user, language and theme.
-import { html, setHTML, icon, logo, api, load, setActor, getActor, toast, initTooltips, loading, empty, avatar, personName, confirmDialog } from './core.js';
+import { html, setHTML, icon, logo, api, load, setActor, getActor, toast, initTooltips, loading, empty, avatar, personName, confirmDialog, setLeaveGuard, hasUnsavedChanges } from './core.js';
 import { L, lang, setLang, loc } from './i18n.js';
 import { setMeta, aiEnabled, aiHint } from './ai.js';
 
@@ -18,6 +18,7 @@ const MODULES = [
 const PUBLIC = { s: () => import('./views/survey.js') };
 
 const state = { meta: null, employees: [], counts: {}, renderToken: 0 };
+let currentHash = location.hash;
 const appEl = document.getElementById('app');
 
 function parseHash() {
@@ -64,11 +65,20 @@ function isDark() {
   return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
+// Asks before discarding a view's unsaved edits; resolves true when it is fine to leave.
+async function confirmLeave() {
+  if (!hasUnsavedChanges()) return true;
+  const ok = await confirmDialog(L('有未保存的修改，离开后将丢失。确定离开？', 'You have unsaved changes that will be lost. Leave anyway?'), { danger: true, confirmLabel: L('离开', 'Leave') });
+  if (ok) setLeaveGuard(null);
+  return ok;
+}
+
 function wireShell() {
   const app = appEl.querySelector('.app');
   appEl.querySelector('[data-menu]').addEventListener('click', () => app.classList.toggle('nav-open'));
   appEl.querySelectorAll('[data-nav]').forEach((a) => a.addEventListener('click', () => app.classList.remove('nav-open')));
-  appEl.querySelector('[data-lang]').addEventListener('click', () => {
+  appEl.querySelector('[data-lang]').addEventListener('click', async () => {
+    if (!(await confirmLeave())) return;
     setLang(lang() === 'en' ? 'zh' : 'en');
     shell();
     route();
@@ -88,7 +98,11 @@ function wireShell() {
     shell();
     route();
   });
-  appEl.querySelector('#actor-select').addEventListener('change', (e) => {
+  appEl.querySelector('#actor-select').addEventListener('change', async (e) => {
+    if (!(await confirmLeave())) {
+      e.target.value = getActor();
+      return;
+    }
     setActor(e.target.value);
     shell();
     route();
@@ -212,6 +226,8 @@ async function refreshShellData() {
 async function route() {
   const r = parseHash();
   const token = ++state.renderToken;
+  setLeaveGuard(null);
+  currentHash = location.hash;
   if (PUBLIC[r.module]) {
     setHTML(appEl, html`<div class="public-wrap" id="view"></div>`);
     const mod = await PUBLIC[r.module]();
@@ -258,11 +274,24 @@ async function boot() {
     const hr = state.employees.find((e) => e.title === '人力资源总监') || state.employees[0];
     if (hr) setActor(hr.id);
   }
-  window.addEventListener('hashchange', () => {
+  window.addEventListener('hashchange', async () => {
+    if (hasUnsavedChanges()) {
+      // Put the address back while asking; the browser has already moved to the new hash.
+      const target = location.hash;
+      history.replaceState(null, '', currentHash || '#/');
+      if (!(await confirmLeave())) return;
+      location.hash = target;
+      return;
+    }
     const r = parseHash();
     if (!PUBLIC[r.module] && !appEl.querySelector('.app')) shell();
     route();
     window.scrollTo(0, 0);
+  });
+  window.addEventListener('beforeunload', (e) => {
+    if (!hasUnsavedChanges()) return;
+    e.preventDefault();
+    e.returnValue = '';
   });
   if (!PUBLIC[parseHash().module]) shell();
   route();

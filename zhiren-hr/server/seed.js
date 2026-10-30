@@ -396,6 +396,7 @@ export function generate(today = new Date()) {
     };
     if (stage === 'rejected') doc.rejectReason = pickOne(['skills', 'experience', 'salary', 'withdrew']);
     const rounds = { interview: int(1, 2), offer: 3, hired: 3, rejected: fit === 'mid' ? 2 : 0 }[stage] || 0;
+    if (stage === 'rejected') doc.rejectedFrom = rounds ? 'interview' : 'applied';
     const ivs = interviewersFor(pos);
     const base = fit === 'high' ? 4 : fit === 'mid' ? 3.2 : 2.4;
     ['r1', 'r2', 'r3'].slice(0, rounds).forEach((r, k) => {
@@ -472,6 +473,8 @@ export function generate(today = new Date()) {
     { id: 'v01', model: 'sixbox', title: `${today.getFullYear()} 年度组织健康诊断`, titleEn: `${today.getFullYear()} organizational health check`, scope: 'all', status: 'closed', anonymous: true, createdAt: stampAgo(45), closedAt: daysAgo(20) },
     { id: 'v02', model: 'engagement', title: '第三季度敬业度脉搏调研', titleEn: 'Q3 engagement pulse', scope: 'all', status: 'open', anonymous: true, createdAt: stampAgo(12) },
     { id: 'v03', model: 'team', title: '研发管理团队协作诊断', titleEn: 'Engineering leadership team check', scope: 'd02', status: 'open', anonymous: true, createdAt: stampAgo(6) },
+    // The previous engagement round, so the Q3 report has something to compare with.
+    { id: 'v04', model: 'engagement', title: '第二季度敬业度脉搏调研', titleEn: 'Q2 engagement pulse', scope: 'all', status: 'closed', anonymous: true, createdAt: stampAgo(100), closedAt: daysAgo(86) },
   ];
   const BIAS = {
     sixbox: { purposes: 3.9, structure: 3.1, relationships: 3.6, rewards: 2.8, leadership: 3.5, mechanisms: 2.9, change: 3.4 },
@@ -482,7 +485,7 @@ export function generate(today = new Date()) {
   const COMMENTS = ['希望晋升标准更透明一些。', '跨部门协作流程太长，审批节点多。', '团队氛围很好，上级很支持。', '工作量偏大，希望增加人手。', '希望有更多学习和轮岗机会。', 'Would love clearer career paths for individual contributors.', '薪酬调整周期太长了。', '对公司产品方向很有信心！'];
   const responses = [];
   let rn = 0;
-  const respond = (survey, count) => {
+  const respond = (survey, count, days, bias = BIAS[survey.model]) => {
     const model = MODELS[survey.model];
     const pool = active.filter((e) => survey.scope === 'all' || e.deptId === survey.scope).sort(() => R() - 0.5).slice(0, count);
     for (const respondent of pool) {
@@ -492,18 +495,18 @@ export function generate(today = new Date()) {
       const answers = {};
       for (const d of model.dims) {
         const off = DEPT_OFFSET[deptId]?.[d.key] || 0;
-        for (const it of d.items) answers[it.id] = clamp(Math.round(BIAS[survey.model][d.key] + off + person + normal() * 0.75), 1, 5);
+        for (const it of d.items) answers[it.id] = clamp(Math.round(bias[d.key] + off + person + normal() * 0.75), 1, 5);
       }
       rn += 1;
-      const r = { id: `r${String(rn).padStart(3, '0')}`, surveyId: survey.id, ...(deptId && { deptId }), answers, createdAt: stampAgo(int(1, survey.id === 'v01' ? 40 : survey.id === 'v02' ? 11 : 5), int(9, 18)) };
+      const r = { id: `r${String(rn).padStart(3, '0')}`, surveyId: survey.id, ...(deptId && { deptId }), answers, createdAt: stampAgo(int(days[0], days[1]), int(9, 18)) };
       if (model.enps) r.enps = clamp(Math.round(7.7 + person * 3 + normal() * 1.5), 0, 10);
       if (survey.model === 'engagement' && R() < 0.22) r.comment = pickOne(COMMENTS);
       responses.push(r);
     }
   };
-  respond(surveys[0], 54);
-  respond(surveys[1], 43);
-  respond(surveys[2], 9);
+  respond(surveys[0], 54, [1, 40]);
+  respond(surveys[1], 43, [1, 11]);
+  respond(surveys[2], 9, [1, 5]);
 
   // ---------------------------------------------------------------- service desk
   const hrTeam = [hrbp, cb, recruiter, taMgr];
@@ -570,6 +573,9 @@ export function generate(today = new Date()) {
     },
   ];
   // x02 rows deliberately lack an explicit R in places so the checker has something to say.
+
+  // Generated last so the random draws above (and every test that relies on them) are unchanged.
+  respond(surveys[3], 38, [87, 99], { basic: 3.6, contribution: 3.5, belonging: 3.6, growth: 3.3 });
 
   const activity = [
     [0.2, hrbp, 'update', 'candidates', candidates.find((c) => c.stage === 'offer'), { field: 'stage', from: 'interview', to: 'offer' }],

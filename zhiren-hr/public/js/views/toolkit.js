@@ -1,10 +1,11 @@
 // HR toolkit: a methodology library that links each method to its tool, plus calculators.
-import { html, setHTML, icon, fmt, today, pageHead, field, input, select, method, callout, badge, on } from '../core.js';
+import { html, setHTML, icon, fmt, today, load, pageHead, field, input, select, method, callout, badge, on } from '../core.js';
 import { L, tx } from '../i18n.js';
-import { annualLeave, overtimePay, salaryBand, compaRatio, turnover, recruitingFunnel, headcountPlan, enpsCalc } from '../engine/calc.js';
+import { annualLeave, overtimePay, salaryBand, compaRatio, turnover, recruitingFunnel, headcountPlan, trailingTurnover, funnelRates, openSeats } from '../engine/calc.js';
 import { hbars } from '../charts.js';
 
-const M = (key, cat, name, what, steps, pitfall, href) => ({ key, cat, name, what, steps, pitfall, href });
+// `href` is the tool that applies the method; methods without one are reference only.
+const M = (key, cat, name, what, steps, pitfall, href = null) => ({ key, cat, name, what, steps, pitfall, href });
 const METHODS = [
   M('star', 'hire', ['STAR / 行为事件访谈（BEI）', 'STAR / behavioral event interviewing'], ['过去的行为是未来行为的最佳预测。通过情境-任务-行动-结果追问获取真实证据。', 'Past behavior predicts future behavior. Probe Situation, Task, Action, Result for real evidence.'],
     [['按岗位确定 4-5 项关键能力', 'Pick 4-5 critical competencies for the role'], ['每项能力准备 1-2 道行为题', 'Prepare 1-2 behavioral questions each'], ['追问"你具体做了什么"直到结果', 'Probe "what did you do" through to the result'], ['对照行为锚点独立评分后再讨论', 'Score against anchors independently, then discuss']],
@@ -29,19 +30,19 @@ const METHODS = [
     ['把 IDP 写成"上课清单"', 'Writing the IDP as a list of courses'], '#/learning/idp'),
   M('grow', 'grow', ['GROW 教练模型', 'GROW coaching model'], ['Goal 目标 → Reality 现状 → Options 方案 → Will 行动，用提问帮助员工自己找到答案。', 'Goal, Reality, Options, Will: ask questions that help people find their own answers.'],
     [['G：你希望达成什么？', 'G: What do you want to achieve?'], ['R：现在情况如何？', 'R: Where are you now?'], ['O：有哪些可能的做法？', 'O: What could you do?'], ['W：你会先做什么？何时？', 'W: What will you do first, and when?']],
-    ['急于给建议，把教练对话变成指导', 'Jumping to advice and turning coaching into telling'], '#/learning/idp'),
+    ['急于给建议，把教练对话变成指导', 'Jumping to advice and turning coaching into telling']),
   M('kirkpatrick', 'grow', ['柯氏四级评估', 'Kirkpatrick four levels'], ['反应、学习、行为、结果四个层级评估培训效果，并可延伸计算 ROI。', 'Evaluate training at reaction, learning, behavior and results levels, and extend to ROI.'],
     [['训前定义业务目标与指标', 'Define business goals and metrics before training'], ['训后即时收集满意度与测试', 'Collect reactions and tests right after'], ['3 个月后评估行为改变', 'Assess behavior change after 3 months'], ['分析业务结果与 ROI', 'Analyze results and ROI']],
     ['只做满意度问卷', 'Stopping at the satisfaction survey'], '#/learning/eval'),
   M('sixbox', 'org', ['韦斯伯德六盒模型', 'Weisbord Six-Box model'], ['从目标、结构、关系、激励、领导、支持机制六个盒子诊断组织，领导盒居中维持平衡。', 'Diagnose purposes, structure, relationships, rewards, leadership and mechanisms; leadership keeps the boxes in balance.'],
     [['发起匿名调研', 'Run an anonymous survey'], ['识别得分低且分歧大的盒子', 'Find low-scoring, high-variance boxes'], ['焦点小组验证根因', 'Validate root causes in focus groups'], ['制定干预措施并复测', 'Act and re-measure']],
-    ['只看平均分，忽略部门差异', 'Looking only at averages, ignoring department differences'], '#/org/diagnosis'),
+    ['只看平均分，忽略部门差异', 'Looking only at averages, ignoring department differences'], '#/org/diagnosis?new=sixbox'),
   M('7s', 'org', ['麦肯锡 7S', 'McKinsey 7S'], ['战略、结构、制度三个硬要素与共同价值观、风格、人员、技能四个软要素需要相互匹配。', 'Hard elements (strategy, structure, systems) must align with soft ones (shared values, style, staff, skills).'],
     [['描述当前 7 个要素', 'Describe the current state of all seven'], ['定义目标状态', 'Define the target state'], ['找出不一致之处', 'Find misalignments'], ['排序并制定变革计划', 'Prioritize and plan the change']],
-    ['只调结构不调软要素', 'Changing structure without touching the soft elements'], '#/org/diagnosis'),
+    ['只调结构不调软要素', 'Changing structure without touching the soft elements'], '#/org/diagnosis?new=mck7s'),
   M('lencioni', 'org', ['团队协作五大障碍', 'Five dysfunctions of a team'], ['信任缺失 → 惧怕冲突 → 欠缺投入 → 逃避责任 → 无视结果，自下而上逐层解决。', 'Absence of trust, fear of conflict, lack of commitment, avoidance of accountability, inattention to results: fix them bottom up.'],
     [['团队匿名自评', 'Anonymous team self-assessment'], ['从最底层的短板开始', 'Start with the lowest layer that is weak'], ['约定团队行为规范', 'Agree team norms'], ['季度复盘', 'Review quarterly']],
-    ['跳过信任直接要求结果', 'Demanding results before building trust'], '#/org/diagnosis'),
+    ['跳过信任直接要求结果', 'Demanding results before building trust'], '#/org/diagnosis?new=team'),
   M('raci', 'org', ['RACI 责任矩阵', 'RACI matrix'], ['明确跨部门流程中每个环节由谁执行（R）、谁拍板（A）、咨询谁（C）、通知谁（I）。', 'For every step of a cross-team process, define who does it (R), who decides (A), who is consulted (C) and informed (I).'],
     [['列出流程环节', 'List the process steps'], ['列出参与角色', 'List the roles'], ['逐格分配 RACI', 'Assign RACI cell by cell'], ['检查每行唯一 A', 'Check one A per row']],
     ['A 太多导致无人负责，C 太多导致决策缓慢', 'Too many As means nobody owns it; too many Cs slows decisions'], '#/org/raci'),
@@ -58,7 +59,6 @@ const CALCS = [
   ['turnover', 'route', ['离职率与离职成本', 'Turnover & its cost'], ['年化离职率、主动离职占比与替换成本', 'Annualized turnover, voluntary share and replacement cost']],
   ['funnel', 'briefcase', ['招聘漏斗倒推', 'Recruiting funnel'], ['由招聘目标倒推每个阶段需要的候选人数', 'Work back from hires to candidates needed per stage']],
   ['headcount', 'users', ['人员编制规划', 'Headcount plan'], ['结合业务增长与离职率测算招聘需求', 'Hires needed from growth and attrition']],
-  ['enps', 'heart', ['员工净推荐值', 'eNPS'], ['推荐者占比 − 贬损者占比', '% promoters − % detractors']],
 ];
 
 export default async function toolkit(el, ctx) {
@@ -75,12 +75,34 @@ export default async function toolkit(el, ctx) {
       <p class="small">${tx(m.what)}</p>
       <ol class="small" style="padding-left:18px;margin:6px 0">${m.steps.map((s) => html`<li>${tx(s)}</li>`)}</ol>
       <div class="callout callout-warn small" style="margin:8px 0">${icon('alert')}<div>${L('常见误区：', 'Pitfall: ')}${tx(m.pitfall)}</div></div>
-      <a class="btn btn-sm" href="${m.href}">${L('打开工具', 'Open the tool')} ${icon('chevron-right')}</a></section>`)}</div>`);
+      ${m.href ? html`<a class="btn btn-sm" href="${m.href}">${L('打开工具', 'Open the tool')} ${icon('chevron-right')}</a>` : html`<span class="small muted">${L('方法参考，暂无对应工具', 'Reference only; no matching tool')}</span>`}</section>`)}</div>`);
   on(el, 'click', '[data-cat]', (e, b) => { location.hash = `#/toolkit${b.dataset.cat ? `?cat=${b.dataset.cat}` : ''}`; });
 }
 
-function calculator(el, key) {
+// Turnover, headcount and funnel start from the company's own records (same basis as the dashboard).
+async function liveData(key) {
+  if (!['turnover', 'headcount', 'funnel'].includes(key)) return null;
+  const d = await load('employees', 'positions', 'candidates');
+  return { tt: trailingTurnover(d.employees, today()), seats: openSeats(d.positions, d.candidates), rates: funnelRates(d.candidates) };
+}
+
+async function calculator(el, key) {
   const [, , name, desc] = CALCS.find(([k]) => k === key);
+  const live = await liveData(key).catch(() => null);
+  const tt = live?.tt;
+  const pct1 = (x) => Math.round(x * 1000) / 10;
+  // A live conversion rate when the pipeline has one, otherwise the benchmark default.
+  const rate = (stage, fallback) => {
+    const r = live?.rates[stage];
+    return r?.rate ? { value: r.rate, hint: L(`当前管道：${r.to} / ${r.from} 人`, `Current pipeline: ${r.to} of ${r.from}`) } : { value: fallback, hint: live ? L('管道数据不足，使用经验值', 'Not enough pipeline data; benchmark value') : undefined };
+  };
+  const R = { applied: rate('applied', 30), screen: rate('screen', 50), interview: rate('interview', 25), offer: rate('offer', 80) };
+  const seatsHint = live ? L(`在招职位剩余编制 ${live.seats} 人`, `${live.seats} seats left on open requisitions`) : undefined;
+  const liveNote = {
+    turnover: L('已按近 12 个月员工档案预填，结果与工作台的年化离职率一致；平均年薪与替换成本系数请按实际填写。', 'Prefilled from the last 12 months of employee records, so the rate matches the dashboard. Enter your own average salary and cost multiple.'),
+    headcount: L('当前人数与离职率已按员工档案预填；增长比例请按业务计划填写。', 'Current headcount and attrition come from employee records; enter growth from your business plan.'),
+    funnel: L('录用人数与各阶段转化率已按当前招聘管道预填。仍在流程中的候选人会让后段转化率偏低，可按经验调整。', 'Hires and conversion rates come from the current pipeline. Candidates still in process pull later-stage rates down; adjust as needed.'),
+  }[key];
   const F = {
     leave: html`${field(L('累计工作年限（含以前单位）', 'Total years worked (all employers)'), input('totalYears', { type: 'number', min: 0, step: 0.5, value: 6 }))}
       ${field(L('本单位入职日期', 'Join date'), input('joinDate', { type: 'date', value: today() }))}
@@ -92,30 +114,27 @@ function calculator(el, key) {
     band: html`${field(L('薪级中位值（元/月）', 'Band midpoint (RMB/month)'), input('midpoint', { type: 'number', value: 25000 }))}
       ${field(L('带宽（%）', 'Range spread (%)'), input('spread', { type: 'number', value: 50 }), { hint: L('（最大值 − 最小值）÷ 最小值，专业岗常用 40-60%', '(max − min) / min; professional roles often 40-60%') })}
       ${field(L('员工当前月薪（元）', 'Employee salary (RMB/month)'), input('salary', { type: 'number', value: 21000 }))}`,
-    turnover: html`${field(L('期间离职人数', 'Leavers in period'), input('leavers', { type: 'number', value: 8 }))}
-      ${field(L('其中主动离职', 'Of which voluntary'), input('voluntary', { type: 'number', value: 7 }))}
-      ${field(L('期初人数', 'Headcount at start'), input('startHeadcount', { type: 'number', value: 70 }))}
-      ${field(L('期末人数', 'Headcount at end'), input('endHeadcount', { type: 'number', value: 72 }))}
+    turnover: html`${field(L('期间离职人数', 'Leavers in period'), input('leavers', { type: 'number', value: tt ? tt.leavers.length : 8 }))}
+      ${field(L('其中主动离职', 'Of which voluntary'), input('voluntary', { type: 'number', value: tt ? tt.voluntary : 7 }))}
+      ${field(L('期初人数', 'Headcount at start'), input('startHeadcount', { type: 'number', value: tt ? tt.startHeadcount : 70 }), { hint: tt ? L('当前在职 − 期间入职 + 期间离职', 'Current − joiners + leavers in the period') : undefined })}
+      ${field(L('期末人数', 'Headcount at end'), input('endHeadcount', { type: 'number', value: tt ? tt.endHeadcount : 72 }))}
       ${field(L('期间月数', 'Months in period'), input('months', { type: 'number', value: 12 }))}
       ${field(L('离职员工平均年薪（元）', 'Average annual salary of leavers (RMB)'), input('avgSalary', { type: 'number', value: 240000 }))}
       ${field(L('替换成本系数', 'Replacement cost multiple'), select('costMultiple', [['0.5', L('0.5（基础岗位）', '0.5 (entry roles)')], ['1', L('1.0（专业岗位）', '1.0 (professionals)')], ['1.5', L('1.5（资深/管理岗位）', '1.5 (senior/managers)')], ['2', L('2.0（高管/稀缺岗位）', '2.0 (executives/scarce)')]], { value: '1' }))}`,
-    funnel: html`${field(L('计划录用人数', 'Hires needed'), input('hires', { type: 'number', value: 5 }))}
-      ${field(L('简历 → 初筛通过率（%）', 'Applied → screened (%)'), input('applied', { type: 'number', value: 30 }))}
-      ${field(L('初筛 → 面试通过率（%）', 'Screened → interviewed (%)'), input('screen', { type: 'number', value: 50 }))}
-      ${field(L('面试 → Offer 比例（%）', 'Interviewed → offer (%)'), input('interview', { type: 'number', value: 25 }))}
-      ${field(L('Offer 接受率（%）', 'Offer acceptance (%)'), input('offer', { type: 'number', value: 80 }))}
+    funnel: html`${field(L('计划录用人数', 'Hires needed'), input('hires', { type: 'number', value: live?.seats || 5 }), { hint: seatsHint })}
+      ${field(L('简历 → 初筛通过率（%）', 'Applied → screened (%)'), input('applied', { type: 'number', value: R.applied.value }), { hint: R.applied.hint })}
+      ${field(L('初筛 → 面试通过率（%）', 'Screened → interviewed (%)'), input('screen', { type: 'number', value: R.screen.value }), { hint: R.screen.hint })}
+      ${field(L('面试 → Offer 比例（%）', 'Interviewed → offer (%)'), input('interview', { type: 'number', value: R.interview.value }), { hint: R.interview.hint })}
+      ${field(L('Offer 接受率（%）', 'Offer acceptance (%)'), input('offer', { type: 'number', value: R.offer.value }), { hint: R.offer.hint })}
       ${field(L('招聘总费用（元）', 'Total recruiting cost (RMB)'), input('costs', { type: 'number', value: 60000 }))}`,
-    headcount: html`${field(L('当前人数', 'Current headcount'), input('current', { type: 'number', value: 72 }))}
-      ${field(L('业务增长带来的人员增长（%）', 'Growth in headcount (%)'), input('growth', { type: 'number', value: 15 }))}
-      ${field(L('预计年离职率（%）', 'Expected annual attrition (%)'), input('attrition', { type: 'number', value: 12 }))}`,
-    enps: html`${field(L('推荐者（9-10 分）', 'Promoters (9-10)'), input('promoters', { type: 'number', value: 14 }))}
-      ${field(L('中立者（7-8 分）', 'Passives (7-8)'), input('passives', { type: 'number', value: 16 }))}
-      ${field(L('贬损者（0-6 分）', 'Detractors (0-6)'), input('detractors', { type: 'number', value: 10 }))}`,
+    headcount: html`${field(L('当前人数', 'Current headcount'), input('current', { type: 'number', value: tt ? tt.endHeadcount : 72 }))}
+      ${field(L('业务增长带来的人员增长（%）', 'Growth in headcount (%)'), input('growth', { type: 'number', value: 15 }), { hint: live && tt.endHeadcount ? L(`参考：${seatsHint}，约为当前人数的 ${fmt.pct(live.seats / tt.endHeadcount)}`, `For reference: ${seatsHint}, about ${fmt.pct(live.seats / tt.endHeadcount)} of current headcount`) : undefined })}
+      ${field(L('预计年离职率（%）', 'Expected annual attrition (%)'), input('attrition', { type: 'number', step: 0.1, value: tt ? pct1(tt.rate) : 12 }), { hint: tt ? L('默认取近 12 个月实际离职率', 'Defaults to the actual last-12-month rate') : undefined })}`,
   };
   setHTML(el, html`${pageHead(tx(name), tx(desc))}
     <a href="#/toolkit" class="small">← ${L('工具箱', 'Toolkit')}</a>
     <div class="split-wide" style="margin-top:10px">
-      <section class="card"><form id="calc" class="stack" style="gap:12px">${F[key]}</form></section>
+      <section class="card"><form id="calc" class="stack" style="gap:12px">${live && liveNote ? callout('info', liveNote) : ''}${F[key]}</form></section>
       <section class="card" id="out"></section>
     </div>`);
   const form = el.querySelector('#calc');
@@ -153,14 +172,10 @@ function calculator(el, key) {
       content = html`${hbars(r.stages.map((s, i) => ({ label: names[s.stage], value: s.count, cls: `seq-${i + 1}` })), { table: false })}
         <div class="row" style="gap:28px;margin-top:12px">${big(L('人均招聘成本', 'Cost per hire'), r.costPerHire != null ? fmt.money(r.costPerHire) : '—', 'brand-text')}</div>
         ${method(L('用法：', 'Use:'), L('用历史转化率倒推需要的简历量，判断渠道投入是否足够；转化率异常低的环节就是优化重点。', 'Use historical conversion rates to size sourcing; the stage with an unusually low rate is where to improve.'))}`;
-    } else if (key === 'headcount') {
+    } else {
       const r = headcountPlan(v);
       content = html`<div class="row" style="gap:28px">${big(L('目标人数', 'Target headcount'), r.target)}${big(L('预计离职', 'Expected leavers'), r.leavers)}${big(L('需招聘', 'Hires needed'), r.hires, 'brand-text')}</div>
         ${method(L('公式：', 'Formula:'), L('需招聘 = 目标人数 − 当前人数 + 平均人数 × 离职率。别忘了为关键岗位预留继任与培养周期。', 'Hires = target − current + average headcount × attrition. Allow lead time for key-role succession and ramp-up.'))}`;
-    } else {
-      const r = enpsCalc(v);
-      content = html`<div class="row" style="gap:28px">${big('eNPS', r.score != null ? `${r.score > 0 ? '+' : ''}${r.score}` : '—', r.score >= 0 ? 'ok' : 'danger')}${big(L('样本数', 'Responses'), r.total)}</div>
-        ${method(L('解读：', 'Reading it:'), L('eNPS 取值 −100 到 +100；大于 0 表示推荐者多于贬损者，+10 到 +30 较为常见。应结合趋势和留言解读。', 'eNPS ranges from −100 to +100; above 0 means more promoters than detractors, +10 to +30 is common. Read it with the trend and comments.'))}`;
     }
     setHTML(out, html`<div class="card-head"><h2>${L('结果', 'Result')}</h2></div><div class="stack" style="gap:12px">${content}</div>`);
   };
