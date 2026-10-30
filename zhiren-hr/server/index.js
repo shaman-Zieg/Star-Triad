@@ -7,6 +7,7 @@ import * as db from './db.js';
 import { initAI, aiStatus, aiRateLimited, validateTask, streamTask } from './ai.js';
 import { seedIfEmpty, reseed } from './seed.js';
 import { successionNominationError } from './succession-validation.js';
+import { buildRetentionPlan } from '../public/js/engine/retention.js';
 
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TYPES = {
@@ -149,7 +150,14 @@ async function handleApi(req, res, url) {
   if (!id) {
     if (method === 'GET') return sendJson(res, 200, db.list(col, Object.fromEntries(url.searchParams)));
     if (method === 'POST') {
-      const data = col === 'responses' ? validateResponse(body) : cleanPatch(body);
+      let data = col === 'responses' ? validateResponse(body) : cleanPatch(body);
+      if (col === 'idps' && data.mode === 'retention') {
+        const employee = db.get('employees', String(data.employeeId || ''));
+        const plan = buildRetentionPlan(employee, db.stamp().slice(0, 10));
+        if (!plan) throw new HttpError(400, 'Retention plans require an active high-risk key employee.');
+        if (db.list('idps', { employeeId: employee.id }).some(p => p.mode === 'retention' && p.status === 'active')) throw new HttpError(409, 'An active retention plan already exists.');
+        data = plan;
+      }
       if (col === 'succession') {
         const error = successionNominationError(data, null, (employeeId) => db.get('employees', employeeId), db.stamp().slice(0, 10));
         if (error) throw new HttpError(400, error);
@@ -169,6 +177,13 @@ async function handleApi(req, res, url) {
   }
   if (anonymous) throw new HttpError(405, 'Survey responses cannot be changed');
   if (method === 'PUT') {
+    if (col === 'idps') {
+      const previous = db.get(col, id);
+      if (previous && (previous.mode === 'retention' || body.mode === 'retention')) {
+        if (previous.mode !== 'retention' || (body.mode && body.mode !== 'retention') || (body.employeeId && body.employeeId !== previous.employeeId)) throw new HttpError(400, 'Retention plan type and employee cannot be changed.');
+        for (const key of ['baseline', 'startedAt', 'reviewDue']) delete body[key];
+      }
+    }
     if (col === 'succession') {
       const previous = db.get(col, id);
       if (!previous) throw new HttpError(404, 'Not found');

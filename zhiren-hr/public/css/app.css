@@ -535,3 +535,5 @@ tr.highlight td { background: var(--brand-soft); }
 ul.tight { margin: 0 0 4px; padding-left: 16px; }
 ul.tight li { margin: 2px 0; }
 .risk-table td { vertical-align: top; }
+
+.hiring-overdue { color: var(--danger); background: var(--danger-soft); font-weight: 700; }

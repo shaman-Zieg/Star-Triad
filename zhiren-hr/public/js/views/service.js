@@ -122,7 +122,7 @@ async function profile(el, ctx, d) {
   const b = BOXES[boxKey(e.performance, e.potential)];
   const risk = flightRisk(e, today());
   const enrolls = more.enrollments.filter((x) => x.employeeId === e.id);
-  const idp = more.idps.find((x) => x.employeeId === e.id);
+  const idp = more.idps.find((x) => x.employeeId === e.id && x.mode !== 'retention');
   const tickets = more.tickets.filter((x) => x.requesterId === e.id);
   const ob = more.onboarding.find((x) => x.employeeId === e.id);
   const courseBy = byId(more.courses);

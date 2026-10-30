@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { retentionEligible } from '../public/js/engine/retention.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhiren-test-'));
 process.env.ZHIREN_DB_PATH = path.join(dir, 'test.db');
@@ -38,6 +39,28 @@ const call = async (method, url, body, headers = {}) => {
   });
   return { status: res.status, data: await res.json().catch(() => null) };
 };
+
+test('retention API enforces eligibility, prevents duplicates and preserves risk baseline', async () => {
+  const today = db.stamp().slice(0, 10);
+  const people = db.list('employees');
+  const eligible = people.find(e => retentionEligible(e, today));
+  const ineligible = people.find(e => !retentionEligible(e, today));
+  assert.ok(eligible && ineligible);
+  assert.equal((await call('POST', '/api/idps', { mode: 'retention', employeeId: ineligible.id })).status, 400);
+  const created = await call('POST', '/api/idps', { mode: 'retention', employeeId: eligible.id, baseline: { score: 0 } });
+  assert.equal(created.status, 201);
+  assert.ok(created.data.baseline.score >= 55);
+  assert.equal((await call('POST', '/api/idps', { mode: 'retention', employeeId: eligible.id })).status, 409);
+  const actions = structuredClone(created.data.actions);
+  actions[0].done = true;
+  const saved = await call('PUT', `/api/idps/${created.data.id}`, { actions, baseline: { score: 0 } });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.actions[0].done, true);
+  assert.deepEqual(saved.data.baseline, created.data.baseline);
+  assert.equal((await call('PUT', `/api/idps/${created.data.id}`, { employeeId: ineligible.id })).status, 400);
+  assert.equal((await call('PUT', `/api/idps/${created.data.id}`, { mode: 'gap' })).status, 400);
+  await call('DELETE', `/api/idps/${created.data.id}`);
+});
 
 test('meta reports AI off and demo data is present', async () => {
   const meta = await call('GET', '/api/meta');

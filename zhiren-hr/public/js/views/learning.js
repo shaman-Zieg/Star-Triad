@@ -1,3 +1,4 @@
+import { retentionView } from './retention.js';
 // Training & development: 70-20-10 IDPs, training needs analysis, course catalog and program evaluation.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
@@ -25,6 +26,13 @@ export default async function learning(el, ctx) {
     ${tabs(SUBS.map(([k, n]) => [k, tx(n)]), sub, (k) => `#/learning/${k}`)}`);
   const body = document.createElement('div');
   el.appendChild(body);
+  if (['idp', 'eval'].includes(sub) && !ctx.id && !ctx.query.emp) {
+    const kind = ctx.query.kind === 'retention' ? 'retention' : 'development';
+    setHTML(body, html`<div class="seg" style="margin-bottom:16px"><a class="btn ${kind === 'development' ? 'btn-primary' : ''}" href="#/learning/${sub}">${L('普通发展', 'Development')}</a><a class="btn ${kind === 'retention' ? 'btn-primary' : ''}" href="#/learning/${sub}?kind=retention">${sub === 'eval' ? L('留任评估', 'Retention evaluation') : L('留任干预', 'Retention intervention')}</a></div>`);
+    const content = document.createElement('div'); body.appendChild(content);
+    if (kind === 'retention') return retentionView(content, ctx, d, sub === 'eval');
+    return (sub === 'idp' ? idpView : evalView)(content, ctx, { ...d, idps: d.idps.filter(p => p.mode !== 'retention') });
+  }
   await ({ idp: idpView, tna: tnaView, courses: coursesView, eval: evalView })[sub](body, ctx, d);
 }
 
@@ -92,6 +100,7 @@ async function idpNew(el, ctx, d) {
 async function idpDetail(el, ctx, d) {
   const idp = d.idps.find((i) => i.id === ctx.id);
   if (!idp) return setHTML(el, empty(L('计划不存在', 'Plan not found'), '', 'alert'));
+  if (idp.mode === 'retention') return retentionView(el, ctx, { ...d, idps: [idp] });
   const emp = d.employees.find((e) => e.id === idp.employeeId) || {};
   const progress = idpProgress(idp);
   setHTML(el, html`

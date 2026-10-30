@@ -1,3 +1,4 @@
+import { hiringGap, crossRoleRecommendations } from '../engine/cross-role.js';
 // Intelligent recruitment: requisitions, pipeline, candidate evaluation,
 // batch resume screening, structured interview kits and the JD builder.
 import {
@@ -110,17 +111,19 @@ async function positionsView(el, ctx, d) {
         <thead><tr><th>${L('职位', 'Job')}</th><th>${L('部门', 'Department')}</th><th>${L('优先级', 'Priority')}</th><th class="num">${L('人数', 'Hires')}</th><th>${L('管道（投递/面试/Offer）', 'Pipeline (applied/interview/offer)')}</th><th class="num">${L('已开放', 'Open for')}</th><th>${L('用人经理', 'Hiring manager')}</th><th>${L('状态', 'Status')}</th></tr></thead>
         <tbody>${rows.map((p) => {
           const hired = count(p, ['hired']);
+          const gap = hiringGap(p, d.candidates, today());
           return html`<tr class="clickable" data-href="#/recruit/positions/${p.id}">
             <td><a href="#/recruit/positions/${p.id}"><strong>${loc(p, 'title')}</strong></a><div class="small muted">${p.level} · ${tx(LOCATIONS[p.location] || [p.location, p.location])}${p.salaryMin ? ` · ${p.salaryMin}-${p.salaryMax}k` : ''}</div></td>
             <td>${deptName(d, p.deptId)}</td>
             <td>${badge(tx(PRIORITY[p.priority][0]), PRIORITY[p.priority][1])}</td>
-            <td class="num">${hired}/${p.headcount}</td>
+            <td class="num">${hired}/${p.headcount}${gap.urgent ? html`<div>${badge(L(`缺 ${gap.remaining} 人`, `${gap.remaining} unfilled`), 'danger')}</div>` : ''}</td>
             <td><span class="num">${count(p, ['applied', 'screen'])} / ${count(p, ['interview'])} / ${count(p, ['offer'])}</span></td>
-            <td class="num">${p.status === 'closed' ? '—' : L(`${daysBetween(p.openedAt || p.createdAt, today())} 天`, `${daysBetween(p.openedAt || p.createdAt, today())} d`)}</td>
+            <td class="num ${gap.urgent ? 'hiring-overdue' : ''}">${p.status === 'closed' ? '—' : L(`${daysBetween(p.openedAt || p.createdAt, today())} 天`, `${daysBetween(p.openedAt || p.createdAt, today())} d`)}</td>
             <td>${personName(d.employees.find((e) => e.id === p.hiringManagerId))}</td>
             <td>${statusBadge(p.status)}</td></tr>`;
         })}</tbody></table></div>` : empty(L('没有符合条件的职位', 'No jobs here'), '', 'briefcase')}
-    </section>`);
+    </section>
+    ${rows.filter(p => hiringGap(p, d.candidates, today()).urgent).map(p => crossRolePanel(p, d))}`);
   on(el, 'click', '[data-filter]', (e, b) => { location.hash = `#/recruit/positions?status=${b.dataset.filter}`; });
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
   on(el, 'click', '[data-new]', () => positionForm({}, d, (saved) => { location.hash = `#/recruit/positions/${saved.id}`; }));
@@ -150,6 +153,7 @@ async function positionDetail(el, ctx, d) {
               <td>${match.matched.slice(0, 4).map((k) => html`<span class="tag tag-ok">${skillLabel(k, lang())}</span>`)}${match.missing.slice(0, 2).map((k) => html`<span class="tag tag-miss">${skillLabel(k, lang())}</span>`)}</td>
               <td>${stageBadge(c.stage)}</td><td class="small">${tx(SOURCES[c.source] || [c.source, c.source])}</td></tr>`)}</tbody></table></div>` : empty(L('还没有候选人', 'No candidates yet'), L('添加候选人或使用简历筛选工具批量导入。', 'Add candidates or bulk-import with resume screening.'), 'user')}
         </section>
+        ${crossRolePanel(p, d)}
         <section class="card"><div class="card-head"><h2>${L('职位描述', 'Job description')}</h2><span class="badge">${p.jd ? L('已保存', 'Saved') : L('自动生成预览', 'Auto-generated preview')}</span></div>${md(jdText)}</section>
       </div>
       <div class="stack">
@@ -642,4 +646,16 @@ async function jdView(el, ctx, d) {
       return { title: v.title, department: v.dept, level: v.level, requiredSkills: v.skills.map((k) => skillLabel(k, 'en')), niceToHave: v.niceSkills.map((k) => skillLabel(k, 'en')), minYears: v.minYears, education: tx(EDUCATION[Number(v.education) || 0].name), highlights: v.highlights, jobFamily: detectFamily(v.title) };
     },
   });
+}
+
+function crossRolePanel(p, d) {
+  const gap = hiringGap(p, d.candidates, today());
+  if (!gap.urgent) return '';
+  const recommendations = crossRoleRecommendations(p, d.candidates, today(), lang());
+  return html`<section class="card" style="margin:16px 0">
+    <div class="card-head"><div><h2>${L('跨岗智能推荐', 'Cross-role recommendations')} · ${loc(p, 'title')}</h2><p>${L('高优先级岗位开放超过30天且未招满；从其他岗位和人才池筛选，排除已入职和Offer阶段。', 'High-priority role open over 30 days with vacancies. Search other roles and the talent pool, excluding hired and offer-stage candidates.')}</p></div>${badge(L(`开放 ${gap.days} 天 · 缺 ${gap.remaining} 人`, `${gap.days} days · ${gap.remaining} unfilled`), 'danger')}</div>
+    <p class="small muted">${L('硬性条件：最低工作年限、最低学历、全部必备技能均须满足；信息不足不入选。适配分沿用简历匹配模型（技能45%、加分技能10%、经验20%、学历15%、其他证据10%）。推荐不改变原申请岗位，需人工确认意愿及未通过原因。', 'Hard filters: minimum experience, education and all required skills; missing evidence does not pass. Fit score uses skills 45%, nice-to-have 10%, experience 20%, education 15%, other evidence 10%. Recommendations preserve applications; confirm interest and any rejection reasons.')}</p>
+    <div class="grid cols-3">${recommendations.map(({candidate:c, parsed, match}) => html`<div class="card"><div class="row-between"><a href="#/recruit/pipeline/${c.id}"><strong>${personName(c)}</strong></a>${badge(`${match.score}/100`, 'brand')}</div><p class="small">${L('原申请岗位：', 'Original role: ')}${loc(d.positions.find(x => x.id === c.positionId), 'title') || L('人才池', 'Talent pool')} · ${stageBadge(c.stage)}</p><p class="small">${L('适配理由：', 'Fit evidence: ')}${match.highlights.join('；')}</p><div class="small muted">${L(`经验 ${parsed.years} 年；学历和全部必备技能通过`, `${parsed.years} years; education and required skills passed`)}</div></div>`)}</div>
+    ${recommendations.length < 3 ? html`<p class="small muted">${L(`当前仅有 ${recommendations.length} 名符合硬性条件的跨岗候选人，不放宽条件补足名额。`, `Only ${recommendations.length} candidates meet the hard requirements; filters remain unchanged.`)}</p>` : ''}
+  </section>`;
 }
