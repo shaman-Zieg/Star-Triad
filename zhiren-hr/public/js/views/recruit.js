@@ -8,6 +8,7 @@ import {
 import { L, tx, loc, lang, STAGES, STAGE_ORDER, SOURCES, REJECT_REASONS, POSITION_STATUS, PRIORITY, LOCATIONS } from '../i18n.js';
 import { SKILLS, SKILL_FAMILIES, skillLabel } from '../engine/skills.js';
 import { parseResume, matchCandidate, TIERS, EDUCATION, WEIGHTS } from '../engine/resume.js';
+import { readDocx, DOCX_LIMITS } from '../engine/docx.js';
 import { generateJD, checkInclusive, detectFamily, FAMILIES } from '../engine/jd.js';
 import { planInterview, STAR_PROBES, ROUNDS, RECOMMENDATIONS, aggregateScorecards, DECISIONS } from '../engine/interview.js';
 import { compByKey, LEVELS, targetProfile } from '../engine/competency.js';
@@ -483,8 +484,9 @@ async function screenView(el, ctx, d) {
         <div class="card-head"><h2>${L('批量筛选简历', 'Screen resumes in bulk')}</h2></div>
         <form id="screen-form" class="stack" style="gap:12px">
           ${field(L('目标职位', 'Target job'), select('pos', open.map((p) => [p.id, loc(p, 'title')]), { value: posId }))}
-          ${field(L('简历文本', 'Resume text'), textarea('text', { rows: 12, placeholder: L('粘贴一份或多份简历；多份之间用单独一行 --- 分隔', 'Paste one or more resumes; separate them with a line containing ---') }), { hint: L('也可以导入 .txt / .md 文件（可多选）', 'Or import .txt / .md files (multiple allowed)') })}
-          <input type="file" id="files" accept=".txt,.md,text/plain" multiple class="small">
+          ${field(L('简历文本', 'Resume text'), textarea('text', { rows: 12, placeholder: L('粘贴一份或多份简历；多份之间用单独一行 --- 分隔', 'Paste one or more resumes; separate them with a line containing ---') }), { hint: L('支持 .docx / .txt / .md，可多选。Word 每份最多 10 MB；只提取正文，图片需转为文字。', 'Import .docx / .txt / .md files (multiple allowed). Word: up to 10 MB each; body text only, images need transcription.') })}
+          <input type="file" id="files" accept=".docx,.txt,.md,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple class="small" aria-label="${L('导入简历文件', 'Import resume files')}">
+          <div id="resume-file-status" aria-live="polite" class="small"></div>
           <div class="row"><button class="btn btn-primary" type="submit">${icon('search')}${L('开始筛选', 'Screen')}</button><button class="btn" type="button" data-sample>${L('载入示例简历', 'Load sample resumes')}</button></div>
         </form>
         <div style="margin-top:14px">${method(L('评分方法：', 'How scoring works:'), L(`必备技能 ${WEIGHTS.required}% · 加分技能 ${WEIGHTS.nice}% · 经验 ${WEIGHTS.experience}% · 学历 ${WEIGHTS.education}% · 证书/量化成果/稳定性 ${WEIGHTS.bonus}%。院校、年龄、性别等与岗位无关的信息不计分，以减少筛选偏见。`, `Required skills ${WEIGHTS.required}% · nice-to-have ${WEIGHTS.nice}% · experience ${WEIGHTS.experience}% · education ${WEIGHTS.education}% · certificates, quantified results and stability ${WEIGHTS.bonus}%. School, age, gender and other job-irrelevant data never score, to reduce screening bias.`))}</div>
@@ -495,8 +497,42 @@ async function screenView(el, ctx, d) {
   const results = el.querySelector('#screen-results');
   let last = [];
   el.querySelector('#files').addEventListener('change', async (e) => {
-    const texts = await Promise.all([...e.target.files].map((f) => f.text()));
-    form.text.value = [form.text.value.trim(), ...texts].filter(Boolean).join('\n---\n');
+    const picker = e.target, files = [...picker.files];
+    if (!files.length) return;
+    const status = el.querySelector('#resume-file-status');
+    if (files.length > 20 || files.reduce((sum, file) => sum + file.size, 0) > 20 * 1024 * 1024) {
+      setHTML(status, callout('warn', L('每批最多 20 个文件、合计 20 MB，请分批导入。', 'Import up to 20 files and 20 MB per batch.')));
+      picker.value = '';
+      return;
+    }
+    picker.disabled = true;
+    const submit = form.querySelector('[type=submit]');
+    submit.disabled = true;
+    setHTML(status, L('正在读取简历…', 'Reading resumes…'));
+    const texts = [], errors = [];
+    try {
+      // Sequential bounded reads avoid expanding a batch of archives at once.
+      for (const file of files) {
+        try {
+          let text;
+          if (/\.docx$/i.test(file.name)) text = await readDocx(file);
+          else if (/\.(txt|md)$/i.test(file.name)) {
+            if (file.size > 1_000_000) throw new Error(L('文本文件不能超过 1 MB', 'Text files must be at most 1 MB'));
+            text = await file.text();
+            if (!text.trim()) throw new Error(L('文件中没有文字', 'The file contains no text'));
+          } else throw new Error(L('仅支持 .docx、.txt 和 .md；旧版 .doc 请先另存为 .docx。', 'Use .docx, .txt or .md; save older .doc files as .docx first.'));
+          if (text.length > DOCX_LIMITS.textChars) throw new Error(L('每份简历最多 200000 字符', 'Each resume may contain at most 200000 characters'));
+          texts.push(text.trim());
+        } catch (error) { errors.push(`${file.name}: ${error.message}`); }
+      }
+      if (!form.isConnected) return;
+      form.text.value = [form.text.value.trim(), ...texts].filter(Boolean).join('\n---\n');
+      setHTML(status, html`${texts.length ? callout('ok', L(`已读取 ${texts.length} 份简历。请检查文本后开始筛选；尚未保存候选人。`, `${texts.length} resumes read. Review the text, then screen; no candidates have been saved.`)) : ''}${errors.length ? callout('warn', html`<strong>${L('以下文件未导入', 'Files not imported')}</strong><ul>${errors.map(error => html`<li>${error}</li>`)}</ul>`) : ''}`);
+    } finally {
+      picker.disabled = false;
+      picker.value = '';
+      submit.disabled = false;
+    }
   });
   on(el, 'click', '[data-sample]', () => {
     const pos = d.positions.find((p) => p.id === form.pos.value);

@@ -142,5 +142,5 @@ Those projects focus on HR administration and records. Zhiren focuses on the met
 
 - Statutory rules (annual leave, overtime, probation, notice) follow national PRC regulations; provincial rules and company policies differ, so review the sample policies before use.
 - LAN login supports locally provisioned HR, manager and employee roles; SSO and account recovery are not implemented. Use HTTPS for confidential company data.
-- Resume parsing works on plain text (paste, or `.txt`/`.md` files). PDF and Word resumes need converting to text first.
+- Resume screening accepts pasted text and `.txt`, `.md` or Word `.docx` files without new dependencies. DOCX extraction runs in the browser and preserves paragraph, table-cell and line separators; review the extracted text before screening or saving a candidate. Modern browsers with `DecompressionStream('deflate-raw')` are required. Each Word file is limited to 10 MB (2 MB body XML / 200000 text characters); batches allow 20 files / 20 MB. Encrypted, damaged, ZIP64 and image-only files are rejected with a per-file error. Old `.doc`, PDF, headers/footers and OCR are not supported.
 - SQLite suits a single server; a multi-node deployment would need a server database.
