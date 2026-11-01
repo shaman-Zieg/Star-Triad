@@ -34,8 +34,13 @@ const ACTOR_KEY = 'zr-actor';
 let actorId = (() => {
   try { return localStorage.getItem(ACTOR_KEY) || ''; } catch { return ''; }
 })();
-export const getActor = () => actorId;
+let authState = { required: false, user: null };
+export const getAuth = () => authState;
+export const hasRole = (...roles) => !authState.required || roles.includes(authState.user?.role);
+export function setAuth(info) { authState = info || { required: false, user: null }; }
+export const getActor = () => authState.required ? authState.user?.employeeId || '' : actorId;
 export function setActor(id) {
+  if (authState.required) return;
   actorId = id || '';
   try { localStorage.setItem(ACTOR_KEY, actorId); } catch { /* ignore */ }
 }
@@ -49,7 +54,7 @@ export class ApiError extends Error {
 }
 async function request(method, url, body) {
   const opts = { method, headers: { Accept: 'application/json' } };
-  if (actorId) opts.headers['X-Actor'] = actorId;
+  if (!authState.required && actorId) opts.headers['X-Actor'] = actorId;
   if (method !== 'GET') {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body || {});
@@ -61,7 +66,10 @@ async function request(method, url, body) {
     throw new ApiError(0, L('无法连接服务器，请检查网络后重试。', 'Could not reach the server. Check your connection and try again.'));
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error || `${L('请求失败', 'Request failed')} (${res.status})`);
+  if (!res.ok) {
+    if (res.status === 401 && authState.required && !url.startsWith('/api/auth/')) window.dispatchEvent(new Event('zhiren:unauthorized'));
+    throw new ApiError(res.status, data.error || `${L('请求失败', 'Request failed')} (${res.status})`);
+  }
   return data;
 }
 export const api = {
@@ -105,6 +113,7 @@ export const fmt = {
   pct: (x, digits = 0) => (x == null ? '—' : `${(Number(x) * 100).toFixed(digits)}%`),
   money: (n) => (n == null ? '—' : `¥${Number(n).toLocaleString(loc(), { maximumFractionDigits: 0 })}`),
   tenure(hire) {
+    if (!hire) return '—';
     const months = Math.max(0, Math.floor(daysBetween(hire, today()) / 30.44));
     const y = Math.floor(months / 12);
     const m = months % 12;

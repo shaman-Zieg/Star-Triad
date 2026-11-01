@@ -2,7 +2,7 @@ import { retentionView } from './retention.js';
 // Training & development: 70-20-10 IDPs, training needs analysis, course catalog and program evaluation.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, toast, act, field, input, select, on, meter, method,
+  modal, toast, act, field, input, select, on, meter, method, hasRole, getActor,
 } from '../core.js';
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel } from '../engine/competency.js';
@@ -19,16 +19,18 @@ const SUBS = [
 const TYPE = { 70: ['在岗实践 70%', 'On the job 70%'], 20: ['向他人学习 20%', 'From others 20%'], 10: ['正式培训 10%', 'Formal 10%'] };
 
 export default async function learning(el, ctx) {
+  const allowed = hasRole('hr', 'manager') ? SUBS : SUBS.filter(([key]) => ['idp', 'courses'].includes(key));
+  if ((ctx.sub && !allowed.some(([key]) => key === ctx.sub)) || (!hasRole('hr', 'manager') && (ctx.query.emp || ctx.query.kind === 'retention'))) return setHTML(el, empty(L('当前角色无权访问此工具', 'This tool is not available for your role'), '', 'shield'));
   const sub = SUBS.some(([k]) => k === ctx.sub) ? ctx.sub : 'idp';
   const d = await load('employees', 'departments', 'courses', 'enrollments', 'idps');
-  d.active = d.employees.filter((e) => e.status !== 'left');
+  d.active = d.employees.filter((e) => e.status !== 'left' && !e.restricted);
   setHTML(el, html`${pageHead(L('培训发展', 'Learning & growth'), L('从能力差距出发：诊断需求、制定 70-20-10 发展计划、跟踪学习、评估效果。', 'Start from capability gaps: diagnose needs, plan 70-20-10 development, track learning and measure impact.'))}
-    ${tabs(SUBS.map(([k, n]) => [k, tx(n)]), sub, (k) => `#/learning/${k}`)}`);
+    ${tabs(allowed.map(([k, n]) => [k, tx(n)]), sub, (k) => `#/learning/${k}`)}`);
   const body = document.createElement('div');
   el.appendChild(body);
   if (['idp', 'eval'].includes(sub) && !ctx.id && !ctx.query.emp) {
     const kind = ctx.query.kind === 'retention' ? 'retention' : 'development';
-    setHTML(body, html`<div class="seg" style="margin-bottom:16px"><a class="btn ${kind === 'development' ? 'btn-primary' : ''}" href="#/learning/${sub}">${L('普通发展', 'Development')}</a><a class="btn ${kind === 'retention' ? 'btn-primary' : ''}" href="#/learning/${sub}?kind=retention">${sub === 'eval' ? L('留任评估', 'Retention evaluation') : L('留任干预', 'Retention intervention')}</a></div>`);
+    setHTML(body, hasRole('hr', 'manager') ? html`<div class="seg" style="margin-bottom:16px"><a class="btn ${kind === 'development' ? 'btn-primary' : ''}" href="#/learning/${sub}">${L('普通发展', 'Development')}</a><a class="btn ${kind === 'retention' ? 'btn-primary' : ''}" href="#/learning/${sub}?kind=retention">${sub === 'eval' ? L('留任评估', 'Retention evaluation') : L('留任干预', 'Retention intervention')}</a></div>` : '');
     const content = document.createElement('div'); body.appendChild(content);
     if (kind === 'retention') return retentionView(content, ctx, d, sub === 'eval');
     return (sub === 'idp' ? idpView : evalView)(content, ctx, { ...d, idps: d.idps.filter(p => p.mode !== 'retention') });
@@ -47,7 +49,7 @@ async function idpView(el, ctx, d) {
   setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px">
       ${method('70-20-10：', L('70% 来自在岗实践与挑战任务，20% 来自导师、教练与反馈，10% 来自正式培训。', '70% from on-the-job challenges, 20% from mentors, coaching and feedback, 10% from formal training.'))}
-      <div class="row"><select class="input" id="new-emp" style="width:auto" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id)).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>
+      ${hasRole('hr', 'manager') ? html`<div class="row"><select class="input" id="new-emp" style="width:auto" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id)).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>` : ''}
     </div>
     <section class="card card-flush">
       ${d.idps.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('员工', 'Employee')}</th><th>${L('发展重点', 'Focus areas')}</th><th>${L('类型', 'Type')}</th><th>${L('进度', 'Progress')}</th><th>${L('创建', 'Created')}</th></tr></thead>
@@ -57,7 +59,7 @@ async function idpView(el, ctx, d) {
           <td style="min-width:140px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${meter(idpProgress(i), 100, 'ok')}</div><span class="small num">${idpProgress(i)}%</span></div></td>
           <td class="small">${fmt.date(i.createdAt)}</td></tr>`)}</tbody></table></div>` : empty(L('还没有发展计划', 'No development plans yet'), L('从右上角选择员工，系统将根据能力差距自动生成。', 'Pick an employee above; the plan is generated from their competency gaps.'), 'target')}
     </section>`);
-  el.querySelector('#new-emp').addEventListener('change', (e) => { if (e.target.value) location.hash = `#/learning/idp?emp=${e.target.value}`; });
+  el.querySelector('#new-emp')?.addEventListener('change', (e) => { if (e.target.value) location.hash = `#/learning/idp?emp=${e.target.value}`; });
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
 }
 
@@ -154,7 +156,7 @@ async function tnaView(el, ctx, d) {
           const needing = people.filter((e) => targetProfile(e.level)[x.key] - (e.competencies?.[x.key] || 0) >= 1);
           return html`<div class="list-item" style="align-items:flex-start"><div class="grow"><div class="title">${tx(compByKey[x.key].name)} <span class="small muted">${L(`${x.withGap} 人有差距`, `${x.withGap} people with a gap`)}</span></div>
             ${courses.map((c) => html`<div class="meta">${icon('book')} ${loc(c, 'title')} · ${tx(FORMATS[c.format])} · ${c.hours}h</div>`)}</div>
-            ${courses[0] ? html`<button class="btn btn-sm" type="button" data-enroll="${courses[0].id}" data-people="${needing.map((e) => e.id).join(',')}">${L(`为 ${needing.length} 人报名`, `Enroll ${needing.length}`)}</button>` : ''}</div>`;
+            ${courses[0] && hasRole('hr') ? html`<button class="btn btn-sm" type="button" data-enroll="${courses[0].id}" data-people="${needing.map((e) => e.id).join(',')}">${L(`为 ${needing.length} 人报名`, `Enroll ${needing.length}`)}</button>` : ''}</div>`;
         })}
       </section>
     </div>
@@ -191,7 +193,7 @@ async function coursesView(el, ctx, d) {
       <div class="card kpi"><span class="label">${L('平均满意度', 'Satisfaction')}</span><span class="value">${stats.satisfaction ?? '—'}<small>/5</small></span></div>
     </div>
     <div class="row-between" style="margin-bottom:12px"><span class="small muted">${L('每门课程对应一项能力，便于从差距直接找到资源', 'Each course maps to a competency, so gaps lead straight to resources')}</span>
-      <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增课程', 'Add course')}</button></div>
+      ${hasRole('hr') ? html`<button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增课程', 'Add course')}</button>` : ''}</div>
     <section class="card card-flush"><div class="table-wrap"><table class="table">
       <thead><tr><th>${L('课程', 'Course')}</th><th>${L('对应能力', 'Competency')}</th><th>${L('形式', 'Format')}</th><th class="num">${L('学时', 'Hours')}</th><th class="num">${L('报名/完成', 'Enrolled/done')}</th><th class="num">${L('满意度', 'Rating')}</th><th></th></tr></thead>
       <tbody>${d.courses.map((c) => {
@@ -208,8 +210,8 @@ async function coursesView(el, ctx, d) {
       wide: true,
       body: html`${es.length ? html`<div class="table-wrap"><table class="table table-compact"><thead><tr><th>${L('学员', 'Learner')}</th><th>${L('状态', 'Status')}</th><th>${L('进度', 'Progress')}</th><th></th></tr></thead>
         <tbody>${es.map((x) => html`<tr><td>${personLink(emp[x.employeeId])}</td><td>${badge(tx(ENROLL_STATUS[x.status][0]), ENROLL_STATUS[x.status][1])}</td><td style="min-width:100px">${meter(x.progress || 0, 100, 'ok')}</td>
-          <td>${x.status !== 'completed' ? html`<button class="btn btn-sm" type="button" data-complete="${x.id}">${L('标记完成', 'Mark done')}</button>` : ''}</td></tr>`)}</tbody></table></div>` : empty(L('暂无学员', 'No learners yet'), '', 'users')}
-        <div class="row" style="margin-top:12px"><select class="input" name="add" style="flex:1"><option value="">${L('添加学员…', 'Add a learner…')}</option>${d.active.filter((e2) => !es.some((x) => x.employeeId === e2.id)).map((e2) => html`<option value="${e2.id}">${personName(e2)} · ${loc(e2, 'title')}</option>`)}</select></div>`,
+          <td>${x.status !== 'completed' && (hasRole('hr') || x.employeeId === getActor()) ? html`<button class="btn btn-sm" type="button" data-complete="${x.id}">${L('标记完成', 'Mark done')}</button>` : ''}</td></tr>`)}</tbody></table></div>` : empty(L('暂无学员', 'No learners yet'), '', 'users')}
+        ${hasRole('hr') ? html`<div class="row" style="margin-top:12px"><select class="input" name="add" style="flex:1"><option value="">${L('添加学员…', 'Add a learner…')}</option>${d.active.filter((e2) => !es.some((x) => x.employeeId === e2.id)).map((e2) => html`<option value="${e2.id}">${personName(e2)} · ${loc(e2, 'title')}</option>`)}</select></div>` : ''}`,
       submitLabel: L('添加', 'Add'),
       onOpen: (form) => {
         on(form, 'click', '[data-complete]', async (ev, btn) => {
@@ -217,12 +219,12 @@ async function coursesView(el, ctx, d) {
           btn.closest('td').innerHTML = '';
         });
       },
-      onSubmit: async (v) => {
+      onSubmit: hasRole('hr') ? async (v) => {
         if (!v.add) throw new Error(L('请选择学员', 'Choose a learner'));
         await api.post('/api/enrollments', { employeeId: v.add, courseId: c.id, status: 'planned', progress: 0 });
         toast(L('已报名', 'Enrolled'));
         ctx.rerender();
-      },
+      } : null,
       onClose: () => ctx.rerender(),
     });
   });

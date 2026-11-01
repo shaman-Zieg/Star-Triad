@@ -2,7 +2,7 @@
 // succession planning and flight risk.
 import {
   html, setHTML, load, api, icon, fmt, today, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, toast, act, field, select, textarea, likert, on, meter, method, chipSelect, list, getActor,
+  modal, toast, act, field, select, textarea, likert, on, meter, method, chipSelect, list, getActor, hasRole,
 } from '../core.js';
 import { L, tx, loc, lang, RISK_LEVEL } from '../i18n.js';
 import { BOXES, boxKey, ratingsForBox, distribution, PERF_SCALE, POT_SCALE, AGILITY, potentialFromAgility, flightRisk } from '../engine/talent.js';
@@ -25,20 +25,22 @@ const SUBS = [
 ];
 
 export default async function talent(el, ctx) {
+  if (ctx.sub === 'succession' && !hasRole('hr')) return setHTML(el, empty(L('继任计划仅对 HR 开放', 'Succession plans are available to HR only'), '', 'shield'));
   const sub = SUBS.some(([k]) => k === ctx.sub) ? ctx.sub : 'ninebox';
   const d = await load('employees', 'departments', 'succession', 'idps', 'enrollments', 'courses');
+  d.employees = d.employees.filter(e => !e.restricted);
   d.active = d.employees.filter((e) => e.status !== 'left');
   d.today = today();
   d.evaluation = evaluateAll(d.succession, d.employees, { today: d.today, departments: d.departments });
   d.insightCtx = { today: d.today, evaluation: d.evaluation, idps: d.idps, enrollments: d.enrollments, courses: d.courses };
   setHTML(el, html`${pageHead(L('人才盘点', 'Talent review'), L('用统一的标准识别关键人才、发现风险、规划继任——把人才盘点会的方法论变成日常可用的工具。', 'Identify key talent, spot risks and plan succession on one standard: the talent review meeting, turned into an everyday tool.'))}
-    ${tabs(SUBS.map(([k, n]) => [k, tx(n)]), sub, (k) => `#/talent/${k}`)}`);
+    ${tabs(SUBS.filter(([k]) => k !== 'succession' || hasRole('hr')).map(([k, n]) => [k, tx(n)]), sub, (k) => `#/talent/${k}`)}`);
   const body = document.createElement('div');
   el.appendChild(body);
   await ({ ninebox: nineboxView, competency: competencyView, succession: successionView, risk: riskView })[sub](body, ctx, d);
 }
 
-const deptOptions = (d, value) => html`<select class="input" id="dept" style="width:auto" aria-label="${L('部门', 'Department')}"><option value="">${L('全公司', 'Whole company')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === value ? 'selected' : ''}>${loc(x)}</option>`)}</select>`;
+const deptOptions = (d, value) => html`<select class="input" id="dept" style="width:auto" aria-label="${L('部门', 'Department')}"><option value="">${hasRole('hr') ? L('全公司', 'Whole company') : L('可访问范围', 'Accessible scope')}</option>${d.departments.filter(x => hasRole('hr') || d.employees.some(e => e.deptId === x.id)).map((x) => html`<option value="${x.id}" ${x.id === value ? 'selected' : ''}>${loc(x)}</option>`)}</select>`;
 const deptMap = (d) => Object.fromEntries(d.departments.map((x) => [x.id, x]));
 
 // ------------------------------------------------------------------ shared: individual insight
@@ -64,6 +66,7 @@ function insightBlock(ins) {
 
 // ------------------------------------------------------------------ rating forms
 function ratingForm(emp, onSaved) {
+  if (!hasRole('hr') && emp.id === getActor()) return;
   modal({
     title: L(`调整评级 · ${personName(emp)}`, `Adjust ratings · ${personName(emp)}`),
     body: html`
@@ -86,6 +89,7 @@ function ratingForm(emp, onSaved) {
 }
 
 function agilityForm(emp, onSaved) {
+  if (!hasRole('hr') && emp.id === getActor()) return;
   modal({
     title: L(`潜力评估 · ${personName(emp)}`, `Potential assessment · ${personName(emp)}`),
     wide: true,
@@ -117,7 +121,7 @@ async function nineboxView(el, ctx, d) {
     const ps = people.filter((e) => boxKey(e.performance, e.potential) === key).sort((a, z) => z.performance - a.performance);
     return html`<div class="box tone-${b.tone}" data-box="${key}" aria-label="${tx(b.name)}">
       <div class="box-head"><strong>${b.no} · ${tx(b.name)}</strong><span>${ps.length} · ${fmt.pct(ps.length / (people.length || 1))}</span></div>
-      <div class="box-people">${ps.map((e) => html`<span class="pchip" draggable="true" tabindex="0" data-emp="${e.id}" data-tip="${personName(e)} · ${loc(e, 'title')}\n${L('绩效', 'Perf')} ${e.performance} · ${L('潜力', 'Pot')} ${e.potential}">${avatar(e, 'xs')}<span>${personName(e)}</span></span>`)}</div>
+      <div class="box-people">${ps.map((e) => html`<span class="pchip" draggable="${hasRole('hr') || e.id !== getActor() ? 'true' : 'false'}" tabindex="0" data-emp="${e.id}" data-tip="${personName(e)} · ${loc(e, 'title')}\n${L('绩效', 'Perf')} ${e.performance} · ${L('潜力', 'Pot')} ${e.potential}">${avatar(e, 'xs')}<span>${personName(e)}</span></span>`)}</div>
     </div>`;
   };
 
@@ -156,13 +160,13 @@ async function nineboxView(el, ctx, d) {
       <div class="section-title">${L('个人解读（规则引擎，基于本人数据）', 'Individual insight (rule engine, from their own data)')}</div>
       ${insightBlock(ins)}
       <details class="small" style="margin-top:8px"><summary class="muted">${L('该格子的通用做法', 'General practice for this box')}</summary><ul style="margin:6px 0 0;padding-left:18px">${b.actions.map((a) => html`<li>${tx(a)}</li>`)}</ul></details>
-      <div class="row" style="margin-top:12px"><button class="btn btn-sm" type="button" data-rate>${icon('edit')}${L('调整评级', 'Adjust ratings')}</button><a class="btn btn-sm" href="#/talent/competency?emp=${emp.id}">${L('能力画像', 'Competencies')}</a><a class="btn btn-sm" href="#/learning/idp?emp=${emp.id}">${L('发展计划', 'IDP')}</a></div>`);
+      <div class="row" style="margin-top:12px">${hasRole('hr') || emp.id !== getActor() ? html`<button class="btn btn-sm" type="button" data-rate>${icon('edit')}${L('调整评级', 'Adjust ratings')}</button>` : ''}<a class="btn btn-sm" href="#/talent/competency?emp=${emp.id}">${L('能力画像', 'Competencies')}</a><a class="btn btn-sm" href="#/learning/idp?emp=${emp.id}">${L('发展计划', 'IDP')}</a></div>`);
   };
   on(el, 'click', '.pchip', (e, c) => showDetail(people.find((x) => x.id === c.dataset.emp)));
   on(el, 'keydown', '.pchip', (e, c) => { if (e.key === 'Enter') showDetail(people.find((x) => x.id === c.dataset.emp)); });
   on(el, 'click', '[data-rate]', () => selected && ratingForm(selected, () => ctx.rerender()));
   el.querySelector('#dept').addEventListener('change', (e) => { location.hash = `#/talent/ninebox${e.target.value ? `?dept=${e.target.value}` : ''}`; });
-  el.querySelectorAll('.pchip').forEach((c) => c.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', c.dataset.emp)));
+  el.querySelectorAll('.pchip[draggable="true"]').forEach((c) => c.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', c.dataset.emp)));
   el.querySelectorAll('.box').forEach((box) => {
     box.addEventListener('dragover', (e) => {
       e.preventDefault();
@@ -174,7 +178,7 @@ async function nineboxView(el, ctx, d) {
       box.classList.remove('over');
       const emp = people.find((x) => x.id === e.dataTransfer.getData('text/plain'));
       const key = Number(box.dataset.box);
-      if (!emp || boxKey(emp.performance, emp.potential) === key) return;
+      if (!emp || (!hasRole('hr') && emp.id === getActor()) || boxKey(emp.performance, emp.potential) === key) return;
       const patch = ratingsForBox(key, emp);
       await act(null, () => api.put(`/api/employees/${emp.id}`, patch), L(`${personName(emp)} 已调整到「${tx(BOXES[key].name)}」`, `${personName(emp)} moved to ${tx(BOXES[key].name)}`));
       ctx.rerender();
@@ -197,7 +201,8 @@ async function nineboxView(el, ctx, d) {
     ...(atRisk.length ? atRisk.map(({ e, r }) => `- **${personName(e)}**：${r.factors.slice(0, 2).map((f) => tx(f.text)).join('；')}`) : [L('- 暂无高风险核心人才', '- No high-risk key talent')]),
     '',
     `## ${L('继任缺口', 'Succession gaps')}`,
-    ...(succGaps.length ? succGaps.map((ev) => `- ${loc(ev.plan, 'title')}`) : [L('- 关键岗位均有合适继任者', '- Every key role has a suitable successor')]),
+    ...(!hasRole('hr') ? [L('- 当前角色无权读取继任计划，本纪要不评估继任覆盖。', '- Succession plans are outside your access scope; coverage is not assessed in this summary.')]
+      : succGaps.length ? succGaps.map((ev) => `- ${loc(ev.plan, 'title')}`) : [L('- 关键岗位均有合适继任者', '- Every key role has a suitable successor')]),
     '',
     `## ${L('会议决议建议', 'Decisions for the meeting')}`,
     L('1. 确认关键人才名单并指定发展负责人\n2. 为高风险核心人才制定 30 天内的保留行动\n3. 为存在继任缺口的岗位确定外部招聘或内部培养方案\n4. 需关注人员启动绩效改进计划\n5. 3 个月后复盘行动进展', '1. Confirm the key talent list and name a development owner for each\n2. Agree 30-day retention actions for high-risk key people\n3. Decide external hiring or internal development for roles with a succession gap\n4. Start improvement plans for underperformers\n5. Review progress in 3 months'),
@@ -207,7 +212,7 @@ async function nineboxView(el, ctx, d) {
     ruleMd,
     task: 'talent',
     input: () => ({
-      scope: dept ? deptName(dept) : 'Whole company', headcount: people.length,
+      scope: dept ? deptName(dept) : hasRole('hr') ? 'Whole company' : 'Accessible scope', headcount: people.length,
       distribution: Object.fromEntries(Object.entries(BOXES).map(([k, b]) => [b.name[1], dist.counts[k]])),
       calibrationFlags: dist.checks.map((c) => c.text[1]),
       keyTalent: keyTalent.map((e) => ({ name: e.nameEn, title: e.titleEn, box: BOXES[boxKey(e.performance, e.potential)].name[1] })),
@@ -219,6 +224,7 @@ async function nineboxView(el, ctx, d) {
 
 // ------------------------------------------------------------------ competencies
 function competencyForm(emp, onSaved) {
+  if (!hasRole('hr') && emp.id === getActor()) return;
   modal({
     title: L(`能力评估 · ${personName(emp)}`, `Competency assessment · ${personName(emp)}`),
     wide: true,
@@ -267,7 +273,7 @@ async function competencyView(el, ctx, d) {
     ${emp ? html`<div class="split">
       <section class="card">
         <div class="card-head"><div><h2>${L('能力画像', 'Competency profile')} · ${personName(emp)}</h2><p>${loc(emp, 'title')} · ${ex.band}</p></div>
-          <div class="row"><button class="btn btn-sm" type="button" data-assess>${icon('edit')}${a.status === 'complete' ? L('重新评估', 'Reassess') : L('开始评估', 'Assess now')}</button>${a.status === 'complete' ? html`<a class="btn btn-sm btn-primary" href="#/learning/idp?emp=${emp.id}">${L('生成发展计划', 'Create IDP')}</a>` : ''}</div></div>
+          <div class="row">${hasRole('hr') || emp.id !== getActor() ? html`<button class="btn btn-sm" type="button" data-assess>${icon('edit')}${a.status === 'complete' ? L('重新评估', 'Reassess') : L('开始评估', 'Assess now')}</button>` : ''}${a.status === 'complete' ? html`<a class="btn btn-sm btn-primary" href="#/learning/idp?emp=${emp.id}">${L('生成发展计划', 'Create IDP')}</a>` : ''}</div></div>
         ${a.status === 'missing' ? callout('info', L('尚无能力评估记录。下图只显示该职级的目标要求；完成评估后才能判断强项与差距。', 'No assessment yet. The chart shows only the target for this level; strengths and gaps need an assessment.')) : ''}
         ${radar({ axes, series: [...(a.status !== 'missing' ? [{ name: L('当前水平', 'Current'), values: emp.competencies || {}, cls: 's1' }] : []), { name: L(`${emp.level} 目标`, `${emp.level} target`), values: target, cls: 's2' }] })}
       </section>
@@ -513,6 +519,7 @@ async function riskView(el, ctx, d) {
   const lvl = (k) => all.filter((x) => x.r.level === k).length;
 
   const linkCell = (e, r) => {
+    if (!hasRole('hr')) return html`<span class="muted">${L('继任信息仅对 HR 开放', 'Succession information is available to HR')}</span>`;
     const { own, asCandidate } = successionLinks(e.id, d.evaluation);
     const parts = [];
     if ((r.level === 'high' && r.regrettable) || own.length) parts.push(html`<a class="btn btn-sm btn-primary" href="#/talent/succession?emp=${e.id}">${icon('shield')}${L('对应继任者', 'View successors')}</a>`);

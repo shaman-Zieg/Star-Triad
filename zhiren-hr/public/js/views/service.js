@@ -1,7 +1,7 @@
 // Employee services: directory and profiles, service requests, the policy library with its HR assistant, and onboarding.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, daysBetween, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, toast, act, field, input, textarea, select, on, meter, method, getActor, nowStamp,
+  modal, toast, act, field, input, textarea, select, on, meter, method, getActor, nowStamp, hasRole,
 } from '../core.js';
 import { L, tx, loc, lang, LOCATIONS, LEAVE_REASONS, ENROLL_STATUS, RISK_LEVEL } from '../i18n.js';
 import {
@@ -30,6 +30,12 @@ export default async function service(el, ctx) {
   const body = document.createElement('div');
   el.appendChild(body);
   await ({ people: peopleView, requests: requestsView, kb: kbView, onboarding: onboardingView })[sub](body, ctx);
+  if (!hasRole('hr')) {
+    body.querySelectorAll('[data-edit]').forEach(button => button.remove());
+    if (sub !== 'requests') body.querySelectorAll('[data-new], [data-import]').forEach(button => button.remove());
+    body.querySelectorAll('#assignee').forEach(select => { select.disabled = true; });
+    if (!hasRole('manager')) body.querySelectorAll('a[href*="/idp?emp="], a[href^="#/talent/"]').forEach(link => link.remove());
+  }
 }
 
 const typeBadge = (t) => badge(tx(TICKET_TYPES[t]?.name || [t, t]));
@@ -117,6 +123,7 @@ async function peopleView(el, ctx) {
 async function profile(el, ctx, d) {
   const e = d.employees.find((x) => x.id === ctx.id);
   if (!e) return setHTML(el, empty(L('员工不存在', 'Person not found'), '', 'alert'));
+  if (e.restricted) return setHTML(el, html`<a href="#/service/people" class="small">← ${L('员工档案', 'Directory')}</a><section class="card" style="margin-top:12px"><div class="row">${avatar(e, 'lg')}<div><h2>${personName(e)}</h2><p>${loc(e, 'title')} · ${loc(d.departments.find(x => x.id === e.deptId))}</p><p>${e.email || ''}</p></div></div><p class="muted" style="margin-top:16px">${L('此处显示通讯录信息。敏感资料仅对本人、所属管理范围和 HR 开放。', 'Directory information only. Sensitive records are available to the employee, authorized managers and HR.')}</p></section>`);
   const more = await load('enrollments', 'courses', 'idps', 'tickets', 'onboarding');
   const emp = byId(d.employees);
   const reports = d.employees.filter((x) => x.managerId === e.id && x.status !== 'left');
@@ -422,6 +429,8 @@ async function onboardingView(el, ctx) {
     const ob = d.onboarding.find((x) => x.id === ctx.id);
     if (!ob) return setHTML(el, empty(L('入职计划不存在', 'Plan not found'), '', 'alert'));
     const e = emp[ob.employeeId] || {};
+    const canComplete = task => hasRole('hr') || task.owner === 'newhire' && ob.employeeId === getActor()
+      || task.owner === 'buddy' && ob.buddyId === getActor() || task.owner === 'manager' && hasRole('manager') && e.managerId === getActor();
     const done = ob.tasks.filter((t) => t.done).length;
     setHTML(el, html`
       <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(e, 'md')}<div><a href="#/service/onboarding" class="small">← ${L('入职管理', 'Onboarding')}</a><h2 style="font-size:19px">${personName(e)} · ${L('入职计划', 'Onboarding plan')}</h2>
@@ -431,7 +440,7 @@ async function onboardingView(el, ctx) {
         const ts = ob.tasks.filter((t) => t.phase === p);
         if (!ts.length) return '';
         return html`<section class="card"><div class="card-head"><h2>${tx(name)}</h2><span class="badge">${ts.filter((t) => t.done).length}/${ts.length}</span></div>
-          ${ts.map((t) => html`<label class="list-item check" style="align-items:flex-start"><input type="checkbox" data-task="${t.id}" ${t.done ? 'checked' : ''}><span class="grow"><span style="${t.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${tx(t.text)}</span><span class="meta" style="display:block">${tx(OWNERS[t.owner])} · ${fmt.date(t.due)} ${!t.done && t.due < T ? badge(L('逾期', 'Overdue'), 'danger') : ''}</span></span></label>`)}</section>`;
+          ${ts.map((t) => html`<label class="list-item check" style="align-items:flex-start"><input type="checkbox" data-task="${t.id}" ${t.done ? 'checked' : ''} ${canComplete(t) ? '' : 'disabled'}><span class="grow"><span style="${t.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${tx(t.text)}</span><span class="meta" style="display:block">${tx(OWNERS[t.owner])} · ${fmt.date(t.due)} ${!t.done && t.due < T ? badge(L('逾期', 'Overdue'), 'danger') : ''}</span></span></label>`)}</section>`;
       })}</div>`);
     on(el, 'change', '[data-task]', async (e, cb) => {
       const tasks = ob.tasks.map((t) => (t.id === cb.dataset.task ? { ...t, done: cb.checked } : t));

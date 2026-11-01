@@ -1,5 +1,5 @@
 // App shell: navigation, routing, global search, acting user, language and theme.
-import { html, setHTML, icon, logo, api, load, setActor, getActor, toast, initTooltips, loading, empty, avatar, personName, confirmDialog, setLeaveGuard, hasUnsavedChanges } from './core.js';
+import { html, setHTML, icon, logo, api, load, setActor, getActor, getAuth, setAuth, hasRole, toast, initTooltips, loading, empty, avatar, personName, confirmDialog, setLeaveGuard, hasUnsavedChanges } from './core.js';
 import { L, lang, setLang, loc } from './i18n.js';
 import { setMeta, aiEnabled, aiHint } from './ai.js';
 
@@ -16,6 +16,8 @@ const MODULES = [
   { key: 'toolkit', icon: 'tool', name: ['HR 工具箱', 'HR toolkit'], load: () => import('./views/toolkit.js') },
 ];
 const PUBLIC = { s: () => import('./views/survey.js') };
+const moduleAllowed = key => key === 'org' ? hasRole('hr') : key === 'talent' ? hasRole('hr', 'manager') : true;
+const roleName = role => ({ hr: L('HR', 'HR'), manager: L('经理', 'Manager'), employee: L('员工', 'Employee') })[role] || '';
 
 const state = { meta: null, employees: [], counts: {}, renderToken: 0 };
 let currentHash = location.hash;
@@ -33,13 +35,13 @@ function shell() {
   setHTML(appEl, html`<div class="app">
     <aside class="sidebar" aria-label="${L('主导航', 'Main navigation')}">
       <a class="brand" href="#/">${logo()}<span><strong>${L('知人', 'Zhiren')}</strong><small>${L('招聘 · 人才 · 组织发展', 'Hiring · Talent · OD')}</small></span></a>
-      <nav class="nav">${MODULES.map((m) => (m.group
+      <nav class="nav">${MODULES.filter(m => m.group || moduleAllowed(m.key)).map((m) => (m.group
         ? html`<div class="nav-label">${L(...m.group)}</div>`
         : html`<a href="#/${m.key === 'home' ? '' : m.key}" class="${route.module === m.key ? 'active' : ''}" data-nav>${icon(m.icon)}<span>${L(...m.name)}</span>${m.count && state.counts[m.count] ? html`<span class="count">${state.counts[m.count]}</span>` : ''}</a>`))}</nav>
       <div class="sidebar-foot">
         ${aiEnabled() ? html`<div class="ai-pill" style="margin-top:4px" data-tip="Claude · ${state.meta?.ai?.model}"><span class="dot on"></span>${L('Claude 辅助已启用', 'Claude assistance on')}</div>` : ''}
         <div style="margin-top:6px">${L('星海科技 · 演示数据', 'Xinghai Tech · demo data')}</div>
-        <div style="margin-top:6px"><a href="/api/export" download style="color:inherit">${L('导出数据', 'Export data')}</a>${state.meta?.demo ? html` · <a href="#" data-reset style="color:inherit">${L('重置演示数据', 'Reset demo')}</a>` : ''}</div>
+        ${hasRole('hr') ? html`<div style="margin-top:6px"><a href="/api/export" download style="color:inherit">${L('导出数据', 'Export data')}</a>${state.meta?.demo ? html` · <a href="#" data-reset style="color:inherit">${L('重置演示数据', 'Reset demo')}</a>` : ''}</div>` : ''}
       </div>
     </aside>
     <div class="main">
@@ -47,8 +49,8 @@ function shell() {
         <button class="icon-btn menu-btn" type="button" data-menu aria-label="${L('打开菜单', 'Open menu')}">${icon('menu')}</button>
         <div class="search">${icon('search')}<input type="search" id="global-search" placeholder="${L('搜索员工、候选人、职位、制度…', 'Search people, candidates, jobs, policies…')}" autocomplete="off" aria-label="${L('全局搜索', 'Global search')}"><div class="search-menu" hidden></div></div>
         <div class="top-actions">
-          <label class="actor" data-tip="${L('当前以此身份操作（用于记录操作人）', 'You act as this person (used for attribution)')}">${me ? avatar(me, 'xs') : icon('user')}<span>${L('身份', 'Acting as')}</span>
-            <select id="actor-select" aria-label="${L('当前身份', 'Acting as')}">${actorOptions()}</select></label>
+          ${getAuth().required ? html`<div class="actor">${me ? avatar(me, 'xs') : icon('user')}<span>${me ? personName(me) : getAuth().user?.username} · ${roleName(getAuth().user?.role)}</span><button class="btn btn-sm" type="button" data-logout>${L('退出', 'Sign out')}</button></div>` : html`<label class="actor" data-tip="${L('当前以此身份操作（用于记录操作人）', 'You act as this person (used for attribution)')}">${me ? avatar(me, 'xs') : icon('user')}<span>${L('身份', 'Acting as')}</span>
+            <select id="actor-select" aria-label="${L('当前身份', 'Acting as')}">${actorOptions()}</select></label>`}
           <button class="btn btn-sm" type="button" data-lang aria-label="${L('Switch to English', '切换到中文')}">${lang() === 'en' ? '中文' : 'EN'}</button>
           <button class="icon-btn" type="button" data-theme aria-label="${L('切换深浅色', 'Toggle theme')}">${icon(isDark() ? 'sun' : 'moon')}</button>
         </div>
@@ -98,7 +100,13 @@ function wireShell() {
     shell();
     route();
   });
-  appEl.querySelector('#actor-select').addEventListener('change', async (e) => {
+  appEl.querySelector('[data-logout]')?.addEventListener('click', async () => {
+    if (!(await confirmLeave())) return;
+    await api.post('/api/auth/logout', {});
+    clearSession();
+    route();
+  });
+  appEl.querySelector('#actor-select')?.addEventListener('change', async (e) => {
     if (!(await confirmLeave())) {
       e.target.value = getActor();
       return;
@@ -233,12 +241,21 @@ async function route() {
     const mod = await PUBLIC[r.module]();
     return mod.default(appEl.querySelector('#view'), { ...r, rerender: route });
   }
+  if (getAuth().required && !getAuth().user) return loginView();
+  if (!state.employees.length) {
+    try { await reloadEmployees(); } catch (err) {
+      if (err.status === 401) return loginView();
+      return setHTML(appEl, empty(L('无法加载员工资料', 'Could not load people'), err.message, 'alert'));
+    }
+  }
   if (!appEl.querySelector('.app')) shell();
   appEl.querySelectorAll('[data-nav]').forEach((a) => {
     const key = (a.getAttribute('href').replace('#/', '') || 'home');
     a.classList.toggle('active', key === r.module);
   });
   const view = appEl.querySelector('#view');
+  if (!moduleAllowed(r.module)) return setHTML(view, empty(L('当前角色无权访问此模块', 'This module is not available for your role'), '', 'shield'));
+  if (r.module === 'home' && !hasRole('hr')) return personalHome(view);
   const mod = MODULES.find((m) => m.key === r.module);
   if (!mod) {
     setHTML(view, empty(L('页面不存在', 'Page not found'), '', 'alert', html`<a class="btn" href="#/">${L('返回工作台', 'Back to dashboard')}</a>`));
@@ -264,13 +281,14 @@ async function boot() {
   initTooltips();
   try {
     state.meta = await api.get('/api/meta');
-    setMeta(state.meta);
-    state.employees = await api.get('/api/employees');
+    setAuth(await api.get('/api/auth/session'));
+    applyMeta();
+    if (!PUBLIC[parseHash().module] && (!getAuth().required || getAuth().user)) state.employees = await api.get('/api/employees');
   } catch (err) {
     setHTML(appEl, html`<div class="public-wrap">${empty(L('无法连接服务器', 'Cannot reach the server'), err.message, 'alert')}</div>`);
     return;
   }
-  if (!state.employees.some((e) => e.id === getActor())) {
+  if (!getAuth().required && !state.employees.some((e) => e.id === getActor())) {
     const hr = state.employees.find((e) => e.title === '人力资源总监') || state.employees[0];
     if (hr) setActor(hr.id);
   }
@@ -284,7 +302,6 @@ async function boot() {
       return;
     }
     const r = parseHash();
-    if (!PUBLIC[r.module] && !appEl.querySelector('.app')) shell();
     route();
     window.scrollTo(0, 0);
   });
@@ -293,8 +310,42 @@ async function boot() {
     e.preventDefault();
     e.returnValue = '';
   });
-  if (!PUBLIC[parseHash().module]) shell();
+  window.addEventListener('zhiren:unauthorized', () => { clearSession(); if (!PUBLIC[parseHash().module]) loginView(); });
   route();
+}
+
+function applyMeta() {
+  setMeta(hasRole('hr') ? state.meta : { ...state.meta, ai: { ...state.meta?.ai, enabled: false, reason: 'role-restricted' } });
+}
+function clearSession() {
+  setAuth({ required: true, user: null });
+  state.employees = [];
+  state.counts = {};
+  searchCache = null;
+  ++state.renderToken;
+  setLeaveGuard(null);
+}
+function loginView() {
+  setHTML(appEl, html`<div class="public-wrap" style="max-width:460px"><div class="row" style="margin-bottom:24px">${logo()}<strong>${L('知人', 'Zhiren')}</strong></div><section class="card"><h1>${L('登录', 'Sign in')}</h1><p class="muted">${L('请使用管理员配置的公司账号。', 'Use the company account configured by your administrator.')}</p><form id="login-form" style="margin-top:20px"><label class="field"><span class="field-label">${L('账号', 'Username')}</span><input class="input" name="username" autocomplete="username" maxlength="64" required></label><label class="field"><span class="field-label">${L('密码', 'Password')}</span><input class="input" type="password" name="password" autocomplete="current-password" maxlength="256" required></label><p class="form-error" role="alert" hidden></p><button class="btn btn-primary" type="submit">${L('登录', 'Sign in')}</button></form></section></div>`);
+  const form = appEl.querySelector('#login-form');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = form.querySelector('button');
+    const error = form.querySelector('[role=alert]');
+    button.disabled = true;
+    error.hidden = true;
+    try {
+      setAuth(await api.post('/api/auth/login', { username: form.elements.username.value.trim(), password: form.elements.password.value }));
+      form.elements.password.value = '';
+      applyMeta();
+      await reloadEmployees();
+      route();
+    } catch (err) { error.textContent = err.message; error.hidden = false; button.disabled = false; }
+  });
+}
+function personalHome(view) {
+  const me = state.employees.find(e => e.id === getActor());
+  setHTML(view, html`<h1>${L('我的工作台', 'My workspace')}</h1><p class="page-sub">${me ? personName(me) : getAuth().user.username} · ${roleName(getAuth().user.role)}</p><div class="card"><p>${L('员工敏感资料和工作记录仅显示你有权访问的范围。', 'Sensitive employee information and work records are limited to your access scope.')}</p><div class="row" style="margin-top:16px;flex-wrap:wrap"><a class="btn" href="#/service/people/${getActor()}">${L('我的资料', 'My profile')}</a><a class="btn" href="#/service/requests?filter=mine">${L('我的服务申请', 'My requests')}</a><a class="btn" href="#/learning/idp">${L('发展计划', 'Development plans')}</a><a class="btn" href="#/recruit/pipeline">${L('分配给我的面试', 'Assigned interviews')}</a></div></div>`);
 }
 
 // Lets views refresh the cached employee list after edits.

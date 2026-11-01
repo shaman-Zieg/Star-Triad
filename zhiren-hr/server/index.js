@@ -10,6 +10,8 @@ import { successionNominationError } from './succession-validation.js';
 import { buildRetentionPlan } from '../public/js/engine/retention.js';
 import { validationErrors } from '../public/js/engine/validation.js';
 import { buildSurveyResults } from './survey-results.js';
+import { createAuth, AccessError } from './auth.js';
+import { readDocuments, authorizeWrite, publicSurvey } from './access.js';
 
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TYPES = {
@@ -66,15 +68,6 @@ function readJson(req, { allowArray = false } = {}) {
   });
 }
 
-// The acting user is chosen in the UI and only used for attribution (activity
-// feed, comments). There is no sign-in: run this on a trusted network.
-function actorOf(req) {
-  const id = String(req.headers['x-actor'] || '');
-  if (!/^[a-z0-9]{1,24}$/i.test(id)) return null;
-  const emp = db.get('employees', id);
-  return emp ? { id: emp.id, name: emp.name, nameEn: emp.nameEn } : null;
-}
-
 function cleanPatch(body) {
   const { id, createdAt, updatedAt, ...rest } = body;
   return rest;
@@ -112,25 +105,43 @@ function changeDetail(before, after) {
   return null;
 }
 
-async function handleApi(req, res, url) {
+async function handleApi(req, res, url, auth) {
   const parts = url.pathname.split('/').filter(Boolean).slice(1); // drop "api"
   const method = req.method;
   let body = {};
   if (method !== 'GET' && method !== 'HEAD') {
+    auth.checkOrigin(req);
     // A JSON content type forces a CORS preflight, which blocks cross-site writes.
     if (!String(req.headers['content-type'] || '').includes('application/json')) throw new HttpError(415, 'Requests must be sent as JSON.');
     body = await readJson(req);
   }
-  const actor = actorOf(req);
+  if (parts.length === 2 && parts[0] === 'auth') {
+    if (parts[1] === 'session' && method === 'GET') return sendJson(res, 200, auth.info(req));
+    if (parts[1] === 'login' && method === 'POST') return sendJson(res, 200, await auth.login(req, res, body));
+    if (parts[1] === 'logout' && method === 'POST') return sendJson(res, 200, auth.logout(req, res));
+    throw new HttpError(404, 'Not found');
+  }
+  if (parts.length === 3 && parts[0] === 'public' && parts[1] === 'surveys' && method === 'GET') {
+    const survey = db.get('surveys', parts[2]);
+    if (!survey) throw new HttpError(404, 'Survey not found');
+    return sendJson(res, 200, publicSurvey(survey, db.list('departments')));
+  }
 
   if (parts[0] === 'meta' && method === 'GET') {
     return sendJson(res, 200, { ai: aiStatus(), demo: DEMO, version: '1.1.0', today: db.stamp().slice(0, 10) });
   }
+  const user = auth.session(req);
+  const publicResponse = parts.length === 1 && parts[0] === 'responses' && method === 'POST';
+  if (auth.required && !user && !publicResponse) throw new HttpError(401, 'Please sign in.');
+  const actor = publicResponse ? null : auth.actor(req);
+  const requireHR = () => { if (auth.required && user?.role !== 'hr') throw new HttpError(403, 'HR access is required.'); };
   if (parts[0] === 'activity' && method === 'GET') {
+    if (user && user.role !== 'hr') return sendJson(res, 200, []);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 30));
     return sendJson(res, 200, db.recentActivity(limit).map(item => item.col === 'responses' ? { ...item, docId: null, label: null, labelEn: null } : item));
   }
   if (parts[0] === 'survey-results' && method === 'GET' && parts.length <= 2) {
+    requireHR();
     if (url.search) throw new HttpError(400, 'Survey results do not support filters.');
     const survey = parts[1] && db.get('surveys', parts[1]);
     if (parts[1] && !survey) throw new HttpError(404, 'Survey not found');
@@ -138,6 +149,7 @@ async function handleApi(req, res, url) {
     return sendJson(res, 200, survey ? results[0] : results);
   }
   if (parts[0] === 'export' && method === 'GET') {
+    requireHR();
     const out = {};
     for (const col of Object.keys(db.COLLECTIONS)) if (col !== 'responses') out[col] = db.list(col);
     out.surveyResults = db.list('surveys').map(s => buildSurveyResults(s, db.list('responses', { surveyId: s.id })));
@@ -145,11 +157,13 @@ async function handleApi(req, res, url) {
     return res.end(JSON.stringify(out, null, 1));
   }
   if (parts[0] === 'admin' && parts[1] === 'reset' && method === 'POST') {
+    requireHR();
     if (!DEMO) throw new HttpError(403, 'Demo reset is turned off (ZHIREN_DEMO=0).');
     reseed();
     return sendJson(res, 200, { ok: true });
   }
   if (parts[0] === 'ai' && parts[1] && method === 'POST') {
+    requireHR();
     if (!aiStatus().enabled) throw new HttpError(503, 'AI assistance is not configured on this server.');
     const lang = body.lang === 'en' ? 'en' : 'zh';
     const { built, error } = validateTask(parts[1], body.input, lang);
@@ -164,9 +178,15 @@ async function handleApi(req, res, url) {
   const anonymous = db.ANONYMOUS.has(col);
   if (anonymous && (method === 'GET' || method === 'HEAD')) throw new HttpError(403, 'Raw survey responses are private. Use survey-results for anonymous aggregates.');
   if (!id) {
-    if (method === 'GET') return sendJson(res, 200, db.list(col, Object.fromEntries(url.searchParams)));
+    if (method === 'GET') {
+      // Filter only the visible projection: filtering raw ratings first leaks
+      // hidden values via presence/absence in the response.
+      const docs = readDocuments(col, db.list(col), user).filter(doc => [...url.searchParams].every(([key, value]) => Object.hasOwn(doc, key) && doc[key] !== null && typeof doc[key] !== 'object' && String(doc[key]) === value));
+      return sendJson(res, 200, docs);
+    }
     if (method === 'POST') {
       let data = col === 'responses' ? validateResponse(body) : cleanPatch(body);
+      if (!anonymous) data = authorizeWrite(col, method, data, null, user);
       if (col === 'idps' && data.mode === 'retention') {
         const employee = db.get('employees', String(data.employeeId || ''));
         const plan = buildRetentionPlan(employee, db.stamp().slice(0, 10));
@@ -178,7 +198,7 @@ async function handleApi(req, res, url) {
         const error = successionNominationError(data, null, (employeeId) => db.get('employees', employeeId), db.stamp().slice(0, 10));
         if (error) throw new HttpError(400, error);
       }
-      if (!anonymous && actor && !data.createdBy) data.createdBy = actor.id;
+      if (!anonymous && actor && (auth.required || !data.createdBy)) data.createdBy = actor.id;
       if (!anonymous) validateDocument(col, data);
       const doc = db.insert(col, data);
       db.logActivity({ actor: anonymous ? null : actor, action: 'create', col, doc: anonymous ? { id: doc.id } : doc });
@@ -190,12 +210,17 @@ async function handleApi(req, res, url) {
   if (method === 'GET') {
     const doc = db.get(col, id);
     if (!doc) throw new HttpError(404, 'Not found');
-    return sendJson(res, 200, doc);
+    const visible = readDocuments(col, [doc], user)[0];
+    if (!visible) throw new HttpError(404, 'Not found');
+    return sendJson(res, 200, visible);
   }
   if (anonymous) throw new HttpError(405, 'Survey responses cannot be changed');
   if (method === 'PUT') {
     const existing = db.get(col, id);
     if (!existing) throw new HttpError(404, 'Not found');
+    body = cleanPatch(body);
+    if (auth.required) delete body.createdBy;
+    body = authorizeWrite(col, method, body, existing, user);
     if (col === 'idps') {
       const previous = db.get(col, id);
       if (previous && (previous.mode === 'retention' || body.mode === 'retention')) {
@@ -214,9 +239,10 @@ async function handleApi(req, res, url) {
     const result = db.update(col, id, patch);
     if (!result) throw new HttpError(404, 'Not found');
     db.logActivity({ actor, action: 'update', col, doc: result.after, detail: changeDetail(result.before, result.after) });
-    return sendJson(res, 200, result.after);
+    return sendJson(res, 200, readDocuments(col, [result.after], user)[0]);
   }
   if (method === 'DELETE') {
+    authorizeWrite(col, method, {}, db.get(col, id), user);
     const doc = db.remove(col, id);
     if (!doc) throw new HttpError(404, 'Not found');
     db.logActivity({ actor, action: 'delete', col, doc });
@@ -260,17 +286,19 @@ function hostAllowed(req) {
   return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.localhost');
 }
 
-export function createServer() {
+export function createServer({ auth = createAuth() } = {}) {
   return http.createServer(async (req, res) => {
-    const url = new URL(req.url, 'http://localhost');
+    let url = { pathname: '' };
     try {
+      try { url = new URL(req.url, 'http://localhost'); }
+      catch { throw new HttpError(400, 'Bad request URL'); }
       if (!hostAllowed(req)) throw new HttpError(421, 'Unknown host');
       if (url.pathname === '/mcp' || url.pathname.startsWith('/mcp/')) throw new HttpError(404, 'Not found');
-      if (url.pathname.startsWith('/api/')) await handleApi(req, res, url);
+      if (url.pathname.startsWith('/api/')) await handleApi(req, res, url, auth);
       else serveStatic(req, res, url.pathname);
     } catch (err) {
       if (res.headersSent) return res.destroy();
-      if (err instanceof HttpError) {
+      if (err instanceof HttpError || err instanceof AccessError) {
         if (url.pathname.startsWith('/api/') || url.pathname === '/mcp') sendJson(res, err.status, { error: err.message });
         else {
           res.writeHead(err.status, { ...SECURITY_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' });

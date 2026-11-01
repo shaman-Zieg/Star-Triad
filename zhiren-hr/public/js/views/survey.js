@@ -7,7 +7,9 @@ export default async function survey(el, ctx) {
   let s;
   let depts = [];
   try {
-    [s, depts] = await Promise.all([api.get(`/api/surveys/${encodeURIComponent(ctx.sub)}`), api.get('/api/departments')]);
+    const result = await api.get(`/api/public/surveys/${encodeURIComponent(ctx.sub)}`);
+    s = result.survey;
+    depts = result.departments;
   } catch {
     return setHTML(el, empty(L('问卷不存在', 'Survey not found'), L('请确认链接是否完整。', 'Check that the link is complete.'), 'alert'));
   }

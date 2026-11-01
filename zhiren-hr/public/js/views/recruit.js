@@ -3,7 +3,7 @@ import { hiringGap, crossRoleRecommendations } from '../engine/cross-role.js';
 // batch resume screening, structured interview kits and the JD builder.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, daysBetween, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, confirmDialog, toast, act, nowStamp, field, input, textarea, select, wireChips, likert, list, on, getActor, scoreRing, meter, method, copyText, download,
+  modal, confirmDialog, toast, act, nowStamp, field, input, textarea, select, wireChips, likert, list, on, getActor, scoreRing, meter, method, copyText, download, hasRole,
 } from '../core.js';
 import { L, tx, loc, lang, STAGES, STAGE_ORDER, SOURCES, REJECT_REASONS, POSITION_STATUS, PRIORITY, LOCATIONS } from '../i18n.js';
 import { SKILLS, SKILL_FAMILIES, skillLabel } from '../engine/skills.js';
@@ -26,15 +26,22 @@ const SUBS = [
 ];
 
 export default async function recruit(el, ctx) {
+  const allowed = hasRole('hr') ? SUBS : SUBS.filter(([key]) => ['positions', 'pipeline', 'interview'].includes(key));
+  if (ctx.sub && !allowed.some(([key]) => key === ctx.sub)) return setHTML(el, empty(L('当前角色无权访问此工具', 'This tool is not available for your role'), '', 'shield'));
   const sub = SUBS.some(([k]) => k === ctx.sub) ? ctx.sub : 'positions';
   const d = await load('positions', 'candidates', 'departments', 'employees');
   const head = html`${pageHead(L('智能招聘', 'Recruitment'), L('从职位需求、简历筛选、结构化面试到录用入职的全流程工具，评分逻辑透明可追溯。', 'End-to-end hiring tools, from requisition and screening to structured interviews and onboarding, with transparent scoring.'))}
-    ${tabs(SUBS.map(([k, n]) => [k, tx(n), k === 'pipeline' ? d.candidates.filter((c) => !['hired', 'rejected'].includes(c.stage)).length : k === 'positions' ? d.positions.filter((p) => p.status === 'open').length : 0]), sub, (k) => `#/recruit/${k}`)}`;
+    ${tabs(allowed.map(([k, n]) => [k, tx(n), k === 'pipeline' ? d.candidates.filter((c) => !['hired', 'rejected'].includes(c.stage)).length : k === 'positions' ? d.positions.filter((p) => p.status === 'open').length : 0]), sub, (k) => `#/recruit/${k}`)}`;
   const body = document.createElement('div');
   setHTML(el, head);
   el.appendChild(body);
   const views = { positions: positionsView, pipeline: pipelineView, screen: screenView, interview: interviewView, jd: jdView };
   await views[sub](body, ctx, d);
+  if (!hasRole('hr')) {
+    body.querySelectorAll('[data-new], [data-edit], [data-add], [data-save], #move, label[for="move"], a[href^="#/recruit/jd"]').forEach(control => control.remove());
+    body.querySelector('#note-form')?.closest('section')?.remove();
+    body.querySelectorAll('[draggable]').forEach(card => { card.draggable = false; });
+  }
 }
 
 // ------------------------------------------------------------------ shared helpers
@@ -243,6 +250,7 @@ async function pipelineView(el, ctx, d) {
   on(el, 'click', '[data-add]', () => addCandidate(d, posFilter || d.positions.find((p) => p.status === 'open')?.id, () => ctx.rerender()));
   on(el, 'keydown', '.cand', (e, c) => { if (e.key === 'Enter') location.hash = `#/recruit/pipeline/${c.dataset.id}`; });
   on(el, 'click', '.cand', (e, c) => { if (!e.target.closest('a')) location.hash = `#/recruit/pipeline/${c.dataset.id}`; });
+  if (!hasRole('hr')) return;
   el.querySelectorAll('.cand').forEach((c) => {
     c.addEventListener('dragstart', (e) => {
       e.dataTransfer.setData('text/plain', c.dataset.id);
@@ -429,8 +437,10 @@ async function candidateDetail(el, ctx, d) {
 }
 
 function scorecardForm(c, pos, plan, d, onSaved) {
-  const pending = (c.interviews || []).find((i) => !Object.keys(i.scores || {}).length && i.interviewerId === getActor());
-  const interviewers = d.employees.filter((e) => e.status !== 'left');
+  const pending = (c.interviews || []).find((i) => !Object.keys(i.scores || {}).length && i.interviewerId === getActor())
+    || (!hasRole('hr') ? (c.interviews || []).find(i => i.interviewerId === getActor()) : null);
+  if (!hasRole('hr') && !pending) return;
+  const interviewers = d.employees.filter((e) => e.status !== 'left' && (hasRole('hr') || e.id === getActor()));
   const comps = [...new Set([...plan.focus, 'learning', 'collaboration'])].slice(0, 6);
   modal({
     title: L(`面试评分表 · ${personName(c)}`, `Scorecard · ${personName(c)}`),
@@ -438,7 +448,7 @@ function scorecardForm(c, pos, plan, d, onSaved) {
     body: html`
       ${callout('brand', L('请依据候选人讲述的具体行为证据（STAR）评分，而不是整体印象。1 = 明显不足，3 = 符合岗位要求，5 = 远超要求。', 'Score on concrete behavioral evidence (STAR), not overall impressions. 1 = clearly below, 3 = meets the role, 5 = far exceeds.'))}
       <div class="form-grid cols-3" style="margin-top:12px">
-        ${field(L('面试轮次', 'Round'), select('round', ROUNDS.map((r) => [r.key, tx(r.name)]), { value: pending?.round || 'r1' }))}
+        ${field(L('面试轮次', 'Round'), select('round', ROUNDS.filter(r => hasRole('hr') || r.key === pending.round).map((r) => [r.key, tx(r.name)]), { value: pending?.round || 'r1' }))}
         ${field(L('面试官', 'Interviewer'), select('interviewerId', interviewers.map((e) => [e.id, personName(e)]), { value: getActor() }))}
         ${field(L('面试日期', 'Date'), input('date', { type: 'date', value: today() }))}
       </div>
@@ -452,7 +462,7 @@ function scorecardForm(c, pos, plan, d, onSaved) {
       for (const k of comps) if (v[`s_${k}`]) scores[k] = Number(v[`s_${k}`]);
       if (Object.keys(scores).length < comps.length) throw new Error(L('请为每项能力评分', 'Please score every competency'));
       if (!v.recommendation) throw new Error(L('请选择录用建议', 'Please choose a recommendation'));
-      const entry = { id: `iv${Date.now().toString(36)}`, round: v.round, interviewerId: v.interviewerId, date: v.date, scores, recommendation: v.recommendation, notes: v.notes.trim() };
+      const entry = { id: pending?.id || `iv${Date.now().toString(36)}`, round: v.round, interviewerId: v.interviewerId, date: v.date, scores, recommendation: v.recommendation, notes: v.notes.trim() };
       const others = (c.interviews || []).filter((i) => i !== pending);
       const patch = { interviews: [...others, entry] };
       if (c.stage === 'applied' || c.stage === 'screen') Object.assign(patch, { stage: 'interview', stageChangedAt: today() });

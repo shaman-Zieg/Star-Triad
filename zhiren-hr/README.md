@@ -18,7 +18,33 @@ npm start
 
 Open http://localhost:3200. On first run the database is created and seeded (`data/zhiren.db`); an existing database is kept as it is.
 
-There is no sign-in. Use the **Acting as** menu in the top bar to choose who you are; it only drives attribution (activity feed, notes, requests). Run it on a trusted network only.
+Local loopback use keeps the **Acting as** menu for attribution. Binding to a LAN address automatically requires a company account; the server refuses to start without configured accounts. Anonymous survey links remain open without sign-in.
+
+## LAN accounts and roles
+
+Start locally once to initialize the database, and find each user's employee id in the directory URL or local export. Create the HR account first, then any managers or employees:
+
+```bash
+node scripts/manage-users.mjs hr-admin hr e01
+node scripts/manage-users.mjs team-manager manager e03
+node scripts/manage-users.mjs team-member employee e04
+node scripts/manage-users.mjs --list
+```
+
+Each command asks for a password of at least 12 characters with hidden input. Choose the actual employee ids in your database; the examples above do not assign roles automatically. Account files contain salted scrypt hashes, never plaintext passwords, and default to the ignored `data/users.json`. Re-running a username changes its password or role; `--remove <username>` removes an account. At least one active HR account must remain. Restart after account changes: sessions are held in memory and all are invalidated on restart.
+
+Set `HOST=0.0.0.0` to listen on the LAN (PowerShell: `$env:HOST='0.0.0.0'`). Login identity is fixed by the server session; changing `X-Actor` cannot impersonate another user. Cookies are HttpOnly and SameSite=Strict, expire after eight hours, and are revoked at logout. Login attempts are rate limited, and cross-origin writes are rejected.
+
+| Role | Access |
+|---|---|
+| HR | All application records and writes, privacy-safe survey reports, exports, AI assistance and enabled demo reset |
+| Manager | Sensitive employee and development records for their own department and direct reports; performance and competency updates for other people in that scope; their own requests and assigned requests |
+| Employee | Their own sensitive profile, development actions, course progress and requests; assigned service requests |
+| Any signed-in account | Minimal company directory, departments, job descriptions, courses and policies; assigned candidates and only their own interview scorecards; onboarding tasks only for their assigned new-hire/buddy/manager role |
+
+Succession plans, company-wide activity and survey results are HR-only. Employees cannot change their own performance ratings or rewrite development goals. Department members outside a user's scope appear only as directory entries. Permissions apply to API reads and writes, including guessed record ids, rather than only the interface.
+
+For real company data, terminate HTTPS at a trusted reverse proxy and set `ZHIREN_COOKIE_SECURE=1`; the built-in server serves HTTP and does not encrypt a LAN connection. The proxy must preserve the public Host header. Set `ZHIREN_DEMO=0` to disable demo reset. SSO, account recovery and a web-based account management screen are not included.
 
 ## Modules
 
@@ -51,6 +77,8 @@ The sidebar shows **AI assistance on** when it is configured. AI is used for JD 
 | `HOST` | `127.0.0.1` | Bind address. On loopback, requests with other `Host` headers are refused (DNS-rebinding protection) |
 | `ZHIREN_DB_PATH` | `data/zhiren.db` | SQLite database file |
 | `ZHIREN_DEMO` | on | Set to `0` to disable "Reset demo data" |
+| `ZHIREN_USERS_FILE` | `data/users.json` | Local account file required for non-loopback bindings; created by `scripts/manage-users.mjs` |
+| `ZHIREN_COOKIE_SECURE` | off | Set to `1` when the browser uses HTTPS; adds the Secure cookie flag and requires HTTPS origins |
 | `ANTHROPIC_API_KEY` | — | Enables AI assistance (with `npm install`) |
 | `ZHIREN_AI_MODEL` | `claude-opus-5-5` | Claude model for AI assistance |
 | `ZHIREN_AI_RPM` | `20` | AI requests allowed per minute |
@@ -93,7 +121,7 @@ docs/             Validation records
 **Fair and safe by design**
 
 - Resume scoring never uses age, gender, marital status or school prestige; the JD checker flags wording that is discriminatory under PRC law (gender, marital status, hepatitis B, ethnicity, age, household registration) or exclusionary.
-- Survey responses never record who answered. Department breakdowns are hidden below 5 responses, and responses cannot be edited or deleted through the API.
+- Survey responses never record who answered. Raw-response reads are refused; reports exclude departments and undisclosed-department groups below 5 responses from every aggregate, including company totals, and suppress individual items answered by fewer than 5 people. Original free-text comments are not returned. Responses cannot be edited or deleted through the API. JSON exports omit `responses` and include the same privacy-safe `surveyResults` instead.
 - Output is HTML-escaped by default; a strict Content-Security-Policy blocks inline scripts; writes must be JSON (blocks cross-site form posts); CSV exports are protected against formula injection.
 
 ## Open-source references
@@ -110,6 +138,6 @@ Those projects focus on HR administration and records. Zhiren focuses on the met
 ## Limitations
 
 - Statutory rules (annual leave, overtime, probation, notice) follow national PRC regulations; provincial rules and company policies differ, so review the sample policies before use.
-- There is no authentication or role-based access; deploy it on a trusted intranet, or put it behind your SSO proxy.
+- LAN login supports locally provisioned HR, manager and employee roles; SSO and account recovery are not implemented. Use HTTPS for confidential company data.
 - Resume parsing works on plain text (paste, or `.txt`/`.md` files). PDF and Word resumes need converting to text first.
 - SQLite suits a single server; a multi-node deployment would need a server database.
