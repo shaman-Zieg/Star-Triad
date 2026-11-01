@@ -138,13 +138,35 @@ test('survey responses are validated and stay anonymous', async () => {
   const actor = (await call('GET', '/api/employees')).data[0];
   const ok = await call('POST', '/api/responses', { surveyId: open.id, answers: { x0: 4, bad: 9, '<script>': 3 }, enps: 8, createdBy: 'someone' }, { 'X-Actor': actor.id });
   assert.equal(ok.status, 201);
-  assert.deepEqual(ok.data.answers, { x0: 4 });
+  assert.deepEqual(ok.data, { ok: true }, 'submissions do not echo identifiable response records');
   assert.equal(ok.data.createdBy, undefined, 'responses never record who answered');
   const act = (await call('GET', '/api/activity?limit=1')).data[0];
   assert.equal(act.actor, null);
   assert.equal((await call('POST', '/api/responses', { surveyId: closed.id, answers: { x0: 3 } })).status, 400);
   assert.equal((await call('POST', '/api/responses', { surveyId: open.id, answers: {} })).status, 400);
-  assert.equal((await call('PUT', `/api/responses/${ok.data.id}`, { answers: {} })).status, 405);
+  assert.equal(act.docId, null);
+  assert.equal((await call('PUT', '/api/responses/any-response', { answers: {} })).status, 405);
+});
+
+test('raw survey answers never leave API or export, and aggregate filters cannot isolate respondents', async () => {
+  const response = db.list('responses')[0];
+  for (const path of ['/api/responses', `/api/responses/${response.id}`, `/api/responses?deptId=${response.deptId}`, `/api/responses?id=${response.id}`]) {
+    const result = await call('GET', path);
+    assert.equal(result.status, 403);
+    assert.equal(result.data.answers, undefined);
+  }
+  assert.equal((await call('GET', '/api/survey-results?deptId=d01')).status, 400);
+  assert.equal((await call('GET', `/api/survey-results/${response.surveyId}?id=${response.id}`)).status, 400);
+  assert.equal((await call('GET', '/api/survey-results/missing')).status, 404);
+  const aggregate = await call('GET', `/api/survey-results/${response.surveyId}`);
+  assert.equal(aggregate.status, 200);
+  assert.equal(aggregate.data.privacy.minimumGroup, 5);
+  const exported = await call('GET', '/api/export');
+  assert.equal(exported.data.responses, undefined);
+  assert.ok(exported.data.surveyResults.length);
+  assert.deepEqual(exported.data.surveyResults.find(s => s.surveyId === response.surveyId), aggregate.data);
+  assert.doesNotMatch(JSON.stringify(exported.data.surveyResults), /"answers"|"createdAt"|"createdBy"/);
+  assert.ok(exported.data.surveyResults.every(s => s.comments.length === 0));
 });
 
 test('rejects non-JSON writes, unknown collections and foreign hosts', async () => {

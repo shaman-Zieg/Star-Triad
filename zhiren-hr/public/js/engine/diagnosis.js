@@ -199,6 +199,10 @@ export function diagnosisReport(result, lang = 'zh', { title, deptName } = {}) {
     `"${title || pick(model.name, lang)}" received ${result.n} valid responses${deptName ? ` (scope: ${deptName})` : ''}. The overall score is **${result.overall ?? '—'} / 5**, in the "${result.band ? pick(BANDS[result.band].name, lang) : '—'}" band.`,
   ));
   if (result.enps) out.push(L(`员工净推荐值 eNPS 为 **${result.enps.score}**（推荐者 ${result.enps.promoters} 人，贬损者 ${result.enps.detractors} 人）。`, `eNPS is **${result.enps.score}** (${result.enps.promoters} promoters, ${result.enps.detractors} detractors).`));
+  if (result.privacy?.eligibleGroupsOnly) out.push(L(
+    `*实际回收 ${result.totalResponses} 份，本报告仅纳入 ${result.n} 份可公开样本。少于 ${MIN_GROUP} 份的群组及群组内不足门槛的题项、eNPS 均从统计中排除；结果不一定代表所有受访者。原始留言不公开。*`,
+    `*${result.totalResponses} replies were received; this report includes ${result.n} eligible replies. Groups below ${MIN_GROUP}, and items or eNPS below the threshold within each group, are excluded. Results may not represent all respondents. Raw comments are withheld.*`,
+  ));
   out.push('');
   if (result.strengths.length) {
     out.push(`## ${L('优势', 'Strengths')}`);

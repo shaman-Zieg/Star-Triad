@@ -6,7 +6,6 @@ import { flightRisk, boxKey } from '../engine/talent.js';
 import { evaluateAll } from '../engine/succession.js';
 import { isOverdue } from '../engine/service.js';
 import { learningStats } from '../engine/learning.js';
-import { scoreSurvey } from '../engine/diagnosis.js';
 import { trailingTurnover, stageReach } from '../engine/calc.js';
 import { parseYmd } from '../engine/text.js';
 
@@ -56,11 +55,8 @@ export default async function home(el) {
   const openTickets = d.tickets.filter((t) => !['resolved', 'closed'].includes(t.status));
 
   const pulse = d.surveys.filter((s) => s.model === 'engagement').sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  let enps = null;
-  if (pulse) {
-    const rs = await api.get(`/api/responses?surveyId=${pulse.id}`);
-    enps = scoreSurvey('engagement', rs).enps;
-  }
+  const pulseResult = pulse ? await api.get(`/api/survey-results/${encodeURIComponent(pulse.id)}`) : null;
+  const enps = pulseResult?.enps;
 
   // Things that need someone's attention.
   const alerts = [];
@@ -74,7 +70,7 @@ export default async function home(el) {
   if (awaiting.length) alerts.push({ tone: 'info', href: '#/recruit/pipeline', text: L(`${awaiting.length} 场面试已结束但未提交评分表`, `${awaiting.length} interview(s) finished without a scorecard`) });
   const stale = d.candidates.filter((c) => c.stage === 'applied' && daysBetween(c.appliedAt, T) > 5);
   if (stale.length) alerts.push({ tone: 'info', href: '#/recruit/pipeline', text: L(`${stale.length} 位候选人投递超过 5 天未筛选`, `${stale.length} applicant(s) waiting more than 5 days for screening`) });
-  if (pulse?.status === 'open') alerts.push({ tone: 'brand', href: `#/org/diagnosis/${pulse.id}`, text: L(`「${pulse.title}」进行中，已回收 ${enps?.n ?? 0} 份`, `"${pulse.titleEn}" is open with ${enps?.n ?? 0} responses`) });
+  if (pulse?.status === 'open') alerts.push({ tone: 'brand', href: `#/org/diagnosis/${pulse.id}`, text: L(`「${pulse.title}」进行中，已回收 ${pulseResult.totalResponses} 份`, `"${pulse.titleEn}" is open with ${pulseResult.totalResponses} responses`) });
 
   // Charts.
   const stageCounts = stageReach(d.candidates).map((s, i) => ({ label: tx(STAGES[s.stage]), value: s.count, cls: `seq-${i + 1}` }));
@@ -102,7 +98,7 @@ export default async function home(el) {
     users: L(`在职人数：员工档案中状态不是“已离职”的人数。当前共 ${active.length} 人。`, `Headcount: employee records not marked as left. Current count: ${active.length}.`),
     briefcase: L(`招聘需求：状态为招聘中的岗位数及其招聘编制总数。当前 ${open.length} 个岗位，编制合计 ${toHire} 人（含已招人数，不等于剩余缺口）。`, `Open roles and their total hiring targets: ${open.length} roles, ${toHire} planned hires, including filled seats.`),
     route: L(`近12个月离职人数 ÷ 期初期末平均人数 ×100%。期初=当前在职−期间入职+期间离职=${startHC}；计算：${leavers.length} ÷ ((${startHC}+${active.length})÷2) ×100%=${fmt.pct(turnover,1)}。`, `Trailing-12-month leavers / average of opening and closing headcount ×100%. Opening headcount = current − hires + leavers. ${leavers.length} / ((${startHC}+${active.length})/2) ×100%=${fmt.pct(turnover,1)}.`),
-    heart: enps ? L(`员工净推荐值：最新敬业度调研中，推荐者（9–10分）占比减去贬损者（0–6分）占比。计算：(${enps.promoters}−${enps.detractors}) ÷ ${enps.n} ×100=${enps.score}，四舍五入。`, `eNPS: promoters (9–10) minus detractors (0–6), divided by valid responses. (${enps.promoters}−${enps.detractors}) / ${enps.n} ×100=${enps.score}, rounded.`) : L('最新敬业度调研尚无有效eNPS评分，暂不计算。', 'No valid eNPS ratings in the latest engagement survey.'),
+    heart: enps ? L(`员工净推荐值仅统计达到匿名门槛的群组：推荐者（9–10分）占比减去贬损者（0–6分）占比。计算：(${enps.promoters}−${enps.detractors}) ÷ ${enps.n} ×100=${enps.score}，四舍五入。`, `eNPS includes only groups meeting the anonymity threshold: promoters (9–10) minus detractors (0–6), divided by eligible responses. (${enps.promoters}−${enps.detractors}) / ${enps.n} ×100=${enps.score}, rounded.`) : L('最新敬业度调研尚无达到匿名门槛的 eNPS 评分。', 'No eNPS scores meet the anonymity threshold in the latest engagement survey.'),
     star: L(`高潜人才由人才盘点模型识别，当前取潜力等级为3的在职员工。口径=高潜人数÷在职总人数。计算：${hipo} ÷ ${active.length} ×100%${active.length ? '='+fmt.pct(hipo/active.length,0) : '，暂无在职员工，暂不计算'}。`, `High potentials are active employees rated potential 3 in talent review. ${hipo} / ${active.length} ×100%${active.length ? '='+fmt.pct(hipo/active.length,0) : '; no active employees'}.`),
     book: L(`培训完成率=已完成学习记录÷全部报名记录（按人次）。计算：${ls.completed} ÷ ${ls.enrollments} ×100%${ls.enrollments ? '='+fmt.pct(ls.completionRate,0) : '，暂无报名，暂不计算'}。人均学时=已完成课程学时总和÷在职人数；满意度=已完成记录中有效评分的均值。`, `Completion = completed enrollments / all enrollments: ${ls.completed} / ${ls.enrollments}. Hours per head = completed course hours / active employees; satisfaction averages rated completions.`),
     inbox: L(`待处理服务申请：排除已解决和已关闭，当前 ${openTickets.length} 件。超时按服务类别的工作日SLA截止日期判断。`, `Unresolved, unclosed requests: ${openTickets.length}. Overdue uses the service-category business-day SLA.`),
@@ -116,7 +112,7 @@ export default async function home(el) {
       ${kpi(L('在职人数', 'Headcount'), active.length, L(`本月新入职 ${newThisMonth} 人 · ${d.departments.length} 个部门`, `${newThisMonth} joined this month · ${d.departments.length} departments`), '#/org/structure', 'users')}
       ${kpi(L('招聘需求', 'Open roles'), html`${open.length}<small>${L(`个职位 / ${toHire} 人`, `jobs / ${toHire} hires`)}</small>`, L(`管道中 ${inFlight.length} 位候选人${timeToHire ? ` · 平均招聘周期 ${timeToHire} 天` : ''}`, `${inFlight.length} candidates in process${timeToHire ? ` · ${timeToHire} days to hire` : ''}`), '#/recruit/positions', 'briefcase')}
       ${kpi(L('年化离职率', 'Annual turnover'), fmt.pct(turnover, 1), L(`近 12 个月离职 ${leavers.length} 人，主动离职 ${tt.voluntary} 人`, `${leavers.length} leavers in 12 months, ${tt.voluntary} voluntary`), '#/org/structure', 'route')}
-      ${kpi(L('员工净推荐值', 'eNPS'), enps ? (enps.score > 0 ? `+${enps.score}` : enps.score) : '—', pulse ? L(`来自「${pulse.title}」· ${enps?.n ?? 0} 份`, `From "${pulse.titleEn}" · ${enps?.n ?? 0} responses`) : L('尚无敬业度调研', 'No engagement survey yet'), pulse ? `#/org/diagnosis/${pulse.id}` : '#/org/diagnosis', 'heart')}
+      ${kpi(L('员工净推荐值', 'eNPS'), enps ? (enps.score > 0 ? `+${enps.score}` : enps.score) : '—', pulse ? L(`来自「${pulse.title}」· ${enps?.n ?? 0} 份可公开样本`, `From "${pulse.titleEn}" · ${enps?.n ?? 0} eligible replies`) : L('尚无敬业度调研', 'No engagement survey yet'), pulse ? `#/org/diagnosis/${pulse.id}` : '#/org/diagnosis', 'heart')}
       ${kpi(L('高潜人才占比', 'High potentials'), active.length ? fmt.pct(hipo / active.length, 0) : '—', L(`${hipo} 人 · 核心人才 ${boxes.star} 人 · 需关注 ${boxes.risk} 人`, `${hipo} people · ${boxes.star} key talent · ${boxes.risk} need attention`), '#/talent/ninebox', 'star')}
       ${kpi(L('培训完成率', 'Training completion'), ls.enrollments ? fmt.pct(ls.completionRate, 0) : '—', L(`人均学时 ${ls.hoursPerHead} 小时 · 满意度 ${ls.satisfaction ?? '—'}`, `${ls.hoursPerHead} hours per head · satisfaction ${ls.satisfaction ?? '—'}`), '#/learning/courses', 'book')}
       ${kpi(L('待处理服务申请', 'Open requests'), openTickets.length, overdue.length ? L(`${overdue.length} 个已超时`, `${overdue.length} past SLA`) : L('均在时效内', 'All within SLA'), '#/service/requests', 'inbox')}

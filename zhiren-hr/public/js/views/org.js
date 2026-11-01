@@ -4,7 +4,7 @@ import {
   modal, toast, act, field, input, select, on, method, copyText, confirmDialog, setLeaveGuard,
 } from '../core.js';
 import { L, tx, loc, LEAVE_REASONS } from '../i18n.js';
-import { MODELS, scoreSurvey, diagnosisReport, BANDS, MIN_GROUP } from '../engine/diagnosis.js';
+import { MODELS, diagnosisReport, BANDS, MIN_GROUP } from '../engine/diagnosis.js';
 import { checkRaci, RACI } from '../engine/raci.js';
 import { radar, heatmap, divColor, hbars, stackbar } from '../charts.js';
 import { mountReport } from '../ai.js';
@@ -33,7 +33,7 @@ const bandColor = (band) => (band === 'healthy' ? 'var(--ok-mark)' : band === 'w
 function roundsOf(s, d) {
   return d.surveys.filter((x) => x.model === s.model && x.scope === s.scope && x.createdAt <= s.createdAt)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((x) => ({ s: x, r: scoreSurvey(x.model, d.responses.filter((y) => y.surveyId === x.id)) }))
+    .map((x) => ({ s: x, r: d.results[x.id] }))
     .filter((x) => x.r.n);
 }
 const previousRound = (s, d) => {
@@ -50,16 +50,17 @@ function delta(now, before, digits = 2) {
 
 // ------------------------------------------------------------------ diagnosis
 async function diagnosisView(el, ctx) {
-  const d = await load('surveys', 'responses', 'departments');
+  const d = await load('surveys', 'departments', 'survey-results');
+  d.results = Object.fromEntries(d['survey-results'].map((result) => [result.surveyId, result]));
   if (ctx.id) return surveyResult(el, ctx, d);
-  const scored = d.surveys.map((s) => ({ s, r: scoreSurvey(s.model, d.responses.filter((x) => x.surveyId === s.id)), prev: previousRound(s, d) })).sort((a, b) => b.s.createdAt.localeCompare(a.s.createdAt));
+  const scored = d.surveys.map((s) => ({ s, r: d.results[s.id], prev: previousRound(s, d) })).sort((a, b) => b.s.createdAt.localeCompare(a.s.createdAt));
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px"><span class="small muted">${L('所有调研均为匿名；按部门查看时，回复少于 5 份的部门不单独展示。', 'All surveys are anonymous; departments with fewer than 5 responses are never shown separately.')}</span>
+    <div class="row-between" style="margin-bottom:12px"><span class="small muted">${L('所有调研均为匿名；统计只涵盖达到 5 份门槛的群组与题项，原始答卷和留言不公开。', 'Surveys are anonymous. Scores include only groups and items meeting the five-response threshold; raw replies and comments are withheld.')}</span>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('发起诊断调研', 'New survey')}</button></div>
     <div class="grid cols-3">${scored.map(({ s, r, prev }) => html`<section class="card">
       <div class="card-head"><div><h2><a href="#/org/diagnosis/${s.id}">${loc(s, 'title')}</a></h2><p>${tx(MODELS[s.model].name)} · ${s.scope === 'all' ? L('全公司', 'Whole company') : loc(d.departments.find((x) => x.id === s.scope))}</p></div>${badge(s.status === 'open' ? L('进行中', 'Open') : L('已结束', 'Closed'), s.status === 'open' ? 'info' : '')}</div>
-      <div class="row" style="gap:20px"><div><div class="small muted">${L('回复数', 'Responses')}</div><div class="result-big">${r.n}</div></div><div><div class="small muted">${L('整体得分', 'Overall')}</div><div class="result-big">${r.overall ?? '—'}</div>${prev ? delta(r.overall, prev.r.overall) : ''}</div>${r.enps ? html`<div><div class="small muted">eNPS</div><div class="result-big">${r.enps.score}</div></div>` : ''}</div>
-      <div style="margin:8px 0">${bandBadge(r.band)}</div>
+      <div class="row" style="gap:20px"><div><div class="small muted">${L('回复数', 'Responses')}</div><div class="result-big">${r.totalResponses}</div></div><div><div class="small muted">${L('整体得分', 'Overall')}</div><div class="result-big">${r.overall ?? '—'}</div>${prev ? delta(r.overall, prev.r.overall) : ''}</div>${r.enps ? html`<div><div class="small muted">eNPS</div><div class="result-big">${r.enps.score}</div></div>` : ''}</div>
+      <div style="margin:8px 0">${bandBadge(r.band)} <span class="small muted">${L(`${r.n} 份纳入可公开统计`, `${r.n} replies included in released statistics`)}</span></div>
       <div class="row"><a class="btn btn-sm" href="#/org/diagnosis/${s.id}">${L('查看报告', 'View report')}</a>${s.status === 'open' ? html`<button class="btn btn-sm" type="button" data-copy="${s.id}">${icon('link')}${L('复制填写链接', 'Copy survey link')}</button>` : ''}</div>
     </section>`)}</div>`);
   const openNew = (model) => modal({
@@ -96,8 +97,7 @@ async function surveyResult(el, ctx, d) {
   const s = d.surveys.find((x) => x.id === ctx.id);
   if (!s) return setHTML(el, empty(L('调研不存在', 'Survey not found'), '', 'alert'));
   const model = MODELS[s.model];
-  const rs = d.responses.filter((x) => x.surveyId === s.id);
-  const r = scoreSurvey(s.model, rs);
+  const r = d.results[s.id];
   const dimMeta = Object.fromEntries(model.dims.map((x) => [x.key, x]));
   const itemText = Object.fromEntries(model.dims.flatMap((x) => x.items.map((it) => [it.id, it.text])));
   const allItems = r.dims.flatMap((x) => x.items).filter((i) => i.mean != null).sort((a, b) => a.mean - b.mean);
@@ -114,10 +114,11 @@ async function surveyResult(el, ctx, d) {
       <div class="row">${s.status === 'open' ? html`<button class="btn" type="button" data-copy>${icon('link')}${L('复制填写链接', 'Copy link')}</button><a class="btn" href="#/s/${s.id}" target="_blank" rel="noopener">${L('预览问卷', 'Preview')}</a>` : ''}
         <button class="btn" type="button" data-toggle>${s.status === 'open' ? L('结束调研', 'Close survey') : L('重新开启', 'Reopen')}</button></div>
     </div>
+    <div style="margin-bottom:16px">${callout('info', L(`已回收 ${r.totalResponses} 份，${r.n} 份纳入可公开统计。少于 ${MIN_GROUP} 份的群组同时从总体与部门统计中排除；每个群组的题项与 eNPS 也须分别达到门槛。原始答卷和留言不公开。`, `${r.totalResponses} replies received; ${r.n} included in released statistics. Groups under ${MIN_GROUP} are excluded from both overall and department scores. Each group's items and eNPS must also meet the threshold. Raw replies and comments are withheld.`))}</div>
     ${r.n ? html`
     <div class="grid cols-4" style="margin-bottom:16px">
-      <div class="card kpi"><span class="label">${L('有效回复', 'Responses')}</span><span class="value">${r.n}</span></div>
-      <div class="card kpi"><span class="label">${L('整体得分', 'Overall score')}</span><span class="value">${r.overall}<small>/5</small></span><span class="sub">${bandBadge(r.band)} ${prev ? delta(r.overall, prev.overall) : ''}</span></div>
+      <div class="card kpi"><span class="label">${L('纳入统计的回复', 'Included responses')}</span><span class="value">${r.n}</span></div>
+      <div class="card kpi"><span class="label">${L('整体得分', 'Overall score')}</span><span class="value">${r.overall ?? '—'}<small>/5</small></span><span class="sub">${bandBadge(r.band)} ${prev ? delta(r.overall, prev.overall) : ''}</span></div>
       <div class="card kpi"><span class="label">${L('最强维度', 'Strongest')}</span><span class="value" style="font-size:20px">${r.strengths[0] ? tx(dimMeta[r.strengths[0]].name) : '—'}</span></div>
       ${r.enps ? html`<div class="card"><div class="small muted">eNPS</div><div class="result-big">${r.enps.score > 0 ? '+' : ''}${r.enps.score} ${prev?.enps ? delta(r.enps.score, prev.enps.score, 0) : ''}</div>${stackbar([{ label: L('贬损者 0-6', 'Detractors 0-6'), value: r.enps.detractors, cls: 'neg' }, { label: L('中立 7-8', 'Passives 7-8'), value: r.enps.passives, cls: 'mid' }, { label: L('推荐者 9-10', 'Promoters 9-10'), value: r.enps.promoters, cls: 'pos' }])}</div>`
         : html`<div class="card kpi"><span class="label">${L('最需改进', 'Weakest')}</span><span class="value" style="font-size:20px">${r.issues[0] ? tx(dimMeta[r.issues[0]].name) : '—'}</span></div>`}
@@ -148,8 +149,7 @@ async function surveyResult(el, ctx, d) {
       <section class="card"><div class="card-head"><h2>${L('得分最高的题目', 'Highest-scoring items')}</h2></div>
         ${allItems.slice(-4).reverse().map((i) => html`<div class="list-item"><div class="grow"><div>${tx(itemText[i.id])}</div><div class="meta">${L('认同率', 'Favorable')} ${fmt.pct(i.fav)}</div></div><strong class="num" style="color:var(--ok)">${i.mean}</strong></div>`)}</section>
     </div>
-    ${r.comments.length ? html`<section class="card" style="margin-top:16px"><div class="card-head"><h2>${L('员工留言', 'Comments')}</h2><span class="badge">${r.comments.length}</span></div>${r.comments.map((c) => html`<div class="list-item">${icon('message')}<div class="grow">${c}</div></div>`)}</section>` : ''}
-    <div id="ai-diagnosis" style="margin-top:16px"></div>` : empty(L('还没有回复', 'No responses yet'), L('复制填写链接分发给员工，回复会实时汇总在这里。', 'Copy the survey link and share it; responses roll up here in real time.'), 'pulse')}`);
+    <div id="ai-diagnosis" style="margin-top:16px"></div>` : r.totalResponses ? empty(L('尚未达到匿名门槛', 'Anonymity threshold not met'), L('已收到回复；达到匿名门槛后才会展示可公开的汇总结果。', 'Replies have been received. Aggregate results appear when the anonymity threshold is met.'), 'shield') : empty(L('还没有回复', 'No responses yet'), L('复制填写链接分发给员工，达到匿名门槛后将在这里展示汇总。', 'Copy the survey link and share it; results appear after the anonymity threshold is met.'), 'pulse')}`);
 
   on(el, 'click', '[data-copy]', () => copyText(surveyLink(s)));
   on(el, 'click', '[data-toggle]', async (e, b) => {
@@ -166,7 +166,7 @@ async function surveyResult(el, ctx, d) {
         model: model.name[1], survey: s.titleEn || s.title, scope: s.scope === 'all' ? 'Whole company' : d.departments.find((x) => x.id === s.scope)?.nameEn, responses: r.n, overall: r.overall,
         dimensions: r.dims.map((x) => ({ name: dimMeta[x.key].name[1], mean: x.mean, spread: x.sd, lowestItem: x.items.filter((i) => i.mean != null).sort((a, b) => a.mean - b.mean).map((i) => ({ text: itemText[i.id][1], mean: i.mean }))[0] })),
         departments: r.depts.filter((x) => !x.suppressed).map((x) => ({ name: d.departments.find((y) => y.id === x.deptId)?.nameEn, n: x.n, scores: Object.fromEntries(Object.entries(x.dims).map(([k, v]) => [dimMeta[k].name[1], v])) })),
-        enps: r.enps, comments: r.comments.slice(0, 20),
+        enps: r.enps, comments: [], privacy: 'Only eligible groups and items are included; these scores may not represent all respondents. Raw comments are withheld.',
       }),
     });
   }

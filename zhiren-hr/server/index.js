@@ -9,6 +9,7 @@ import { seedIfEmpty, reseed } from './seed.js';
 import { successionNominationError } from './succession-validation.js';
 import { buildRetentionPlan } from '../public/js/engine/retention.js';
 import { validationErrors } from '../public/js/engine/validation.js';
+import { buildSurveyResults } from './survey-results.js';
 
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TYPES = {
@@ -127,11 +128,19 @@ async function handleApi(req, res, url) {
   }
   if (parts[0] === 'activity' && method === 'GET') {
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 30));
-    return sendJson(res, 200, db.recentActivity(limit));
+    return sendJson(res, 200, db.recentActivity(limit).map(item => item.col === 'responses' ? { ...item, docId: null, label: null, labelEn: null } : item));
+  }
+  if (parts[0] === 'survey-results' && method === 'GET' && parts.length <= 2) {
+    if (url.search) throw new HttpError(400, 'Survey results do not support filters.');
+    const survey = parts[1] && db.get('surveys', parts[1]);
+    if (parts[1] && !survey) throw new HttpError(404, 'Survey not found');
+    const results = (survey ? [survey] : db.list('surveys')).map(s => buildSurveyResults(s, db.list('responses', { surveyId: s.id })));
+    return sendJson(res, 200, survey ? results[0] : results);
   }
   if (parts[0] === 'export' && method === 'GET') {
     const out = {};
-    for (const col of Object.keys(db.COLLECTIONS)) out[col] = db.list(col);
+    for (const col of Object.keys(db.COLLECTIONS)) if (col !== 'responses') out[col] = db.list(col);
+    out.surveyResults = db.list('surveys').map(s => buildSurveyResults(s, db.list('responses', { surveyId: s.id })));
     res.writeHead(200, { ...SECURITY_HEADERS, 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="zhiren-export-${db.stamp().slice(0, 10)}.json"`, 'Cache-Control': 'no-store' });
     return res.end(JSON.stringify(out, null, 1));
   }
@@ -153,6 +162,7 @@ async function handleApi(req, res, url) {
   if (!col || !Object.hasOwn(db.COLLECTIONS, col) || parts.length > 2) throw new HttpError(404, 'Not found');
   const id = parts[1];
   const anonymous = db.ANONYMOUS.has(col);
+  if (anonymous && (method === 'GET' || method === 'HEAD')) throw new HttpError(403, 'Raw survey responses are private. Use survey-results for anonymous aggregates.');
   if (!id) {
     if (method === 'GET') return sendJson(res, 200, db.list(col, Object.fromEntries(url.searchParams)));
     if (method === 'POST') {
@@ -172,7 +182,7 @@ async function handleApi(req, res, url) {
       if (!anonymous) validateDocument(col, data);
       const doc = db.insert(col, data);
       db.logActivity({ actor: anonymous ? null : actor, action: 'create', col, doc: anonymous ? { id: doc.id } : doc });
-      return sendJson(res, 201, doc);
+      return sendJson(res, 201, anonymous ? { ok: true } : doc);
     }
     throw new HttpError(405, 'Method not allowed');
   }
