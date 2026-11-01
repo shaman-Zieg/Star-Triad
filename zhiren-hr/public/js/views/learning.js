@@ -5,7 +5,7 @@ import {
   modal, toast, act, field, input, select, on, meter, method, hasRole, getActor,
 } from '../core.js';
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
-import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel } from '../engine/competency.js';
+import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel, assessCompetencies } from '../engine/competency.js';
 import { buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
 import { radar, heatmap, seqColor, hbars } from '../charts.js';
 import { mountReport } from '../ai.js';
@@ -153,7 +153,8 @@ async function tnaView(el, ctx, d) {
       <section class="card"><div class="card-head"><div><h2>${L('推荐培训项目', 'Recommended programs')}</h2><p>${L('针对前三项优先能力', 'For the top three priorities')}</p></div></div>
         ${top.map((x) => {
           const courses = d.courses.filter((c) => c.competency === x.key);
-          const needing = people.filter((e) => targetProfile(e.level)[x.key] - (e.competencies?.[x.key] || 0) >= 1);
+          // Same population as the analysis: a missing rating is not a gap.
+          const needing = people.filter((e) => assessCompetencies(e.competencies, targetProfile(e.level)).status === 'complete' && targetProfile(e.level)[x.key] - e.competencies[x.key] >= 1);
           return html`<div class="list-item" style="align-items:flex-start"><div class="grow"><div class="title">${tx(compByKey[x.key].name)} <span class="small muted">${L(`${x.withGap} 人有差距`, `${x.withGap} people with a gap`)}</span></div>
             ${courses.map((c) => html`<div class="meta">${icon('book')} ${loc(c, 'title')} · ${tx(FORMATS[c.format])} · ${c.hours}h</div>`)}</div>
             ${courses[0] && hasRole('hr') ? html`<button class="btn btn-sm" type="button" data-enroll="${courses[0].id}" data-people="${needing.map((e) => e.id).join(',')}">${L(`为 ${needing.length} 人报名`, `Enroll ${needing.length}`)}</button>` : ''}</div>`;
@@ -169,7 +170,8 @@ async function tnaView(el, ctx, d) {
     const existing = new Set(d.enrollments.filter((x) => x.courseId === b.dataset.enroll).map((x) => x.employeeId));
     const todo = ids.filter((id) => !existing.has(id));
     if (!todo.length) return toast(L('这些员工都已报名', 'Everyone is already enrolled'));
-    await act(b, () => Promise.all(todo.map((id) => api.post('/api/enrollments', { employeeId: id, courseId: b.dataset.enroll, status: 'planned', progress: 0 }))), L(`已为 ${todo.length} 人报名`, `Enrolled ${todo.length} people`));
+    const enrolled = await act(b, () => Promise.all(todo.map((id) => api.post('/api/enrollments', { employeeId: id, courseId: b.dataset.enroll, status: 'planned', progress: 0 }))), L(`已为 ${todo.length} 人报名`, `Enrolled ${todo.length} people`));
+    if (!enrolled) return;
     b.textContent = L('已报名', 'Enrolled');
     b.disabled = true;
   });
@@ -215,8 +217,8 @@ async function coursesView(el, ctx, d) {
       submitLabel: L('添加', 'Add'),
       onOpen: (form) => {
         on(form, 'click', '[data-complete]', async (ev, btn) => {
-          await act(btn, () => api.put(`/api/enrollments/${btn.dataset.complete}`, { status: 'completed', progress: 100, completedAt: today() }), L('已标记完成', 'Marked done'));
-          btn.closest('td').innerHTML = '';
+          const done = await act(btn, () => api.put(`/api/enrollments/${btn.dataset.complete}`, { status: 'completed', progress: 100, completedAt: today() }), L('已标记完成', 'Marked done'));
+          if (done) btn.closest('td').innerHTML = '';
         });
       },
       onSubmit: hasRole('hr') ? async (v) => {
@@ -264,10 +266,11 @@ async function evalView(el) {
   const form = el.querySelector('#eval-form');
   const out = el.querySelector('#eval-out');
   const names = { 1: L('反应层', 'Reaction'), 2: L('学习层', 'Learning'), 3: L('行为层', 'Behavior'), 4: L('结果层', 'Results') };
+  const signed = (n) => (n > 0 ? `+${n}` : `${n}`);
   const render = () => {
     const r = evaluateProgram(Object.fromEntries(new FormData(form)));
     setHTML(out, html`<div class="card-head"><h2>${L('评估结果', 'Results')}</h2></div>
-      ${r.levels.map((l) => html`<div class="list-item"><span class="badge ${l.ok ? 'badge-ok' : 'badge-warn'}">L${l.level}</span><div class="grow"><div class="title">${names[l.level]} · ${l.level === 2 ? L(`提升 ${l.value} 分${l.gain != null ? `（+${l.gain}%）` : ''}`, `+${l.value} points${l.gain != null ? ` (+${l.gain}%)` : ''}`) : l.level === 4 ? `${l.value > 0 ? '+' : ''}${l.value}%` : `${l.value} / ${l.max}`}</div><div class="meta">${tx(l.note)}</div></div></div>`)}
+      ${r.levels.map((l) => html`<div class="list-item"><span class="badge ${l.ok ? 'badge-ok' : 'badge-warn'}">L${l.level}</span><div class="grow"><div class="title">${names[l.level]} · ${l.level === 2 ? L(`变化 ${signed(l.value)} 分${l.gain != null ? `（${signed(l.gain)}%）` : ''}`, `${signed(l.value)} points${l.gain != null ? ` (${signed(l.gain)}%)` : ''}`) : l.level === 4 ? `${l.value > 0 ? '+' : ''}${l.value}%` : `${l.value} / ${l.max}`}</div><div class="meta">${tx(l.note)}</div></div></div>`)}
       ${r.roi != null ? html`<div class="row" style="margin-top:12px;gap:24px"><div><div class="small muted">ROI</div><div class="result-big" style="color:var(--${r.roi >= 0 ? 'ok' : 'danger'})">${r.roi}%</div></div><div><div class="small muted">${L('收益成本比', 'Benefit-cost ratio')}</div><div class="result-big">${r.bcr}</div></div></div>` : ''}`);
   };
   form.addEventListener('input', render);

@@ -1,4 +1,4 @@
-import { html, setHTML, api, today, personName, fmt, badge, callout, empty, on, act, modal, field, input, textarea, select } from '../core.js';
+import { html, setHTML, api, today, personName, fmt, badge, callout, empty, on, act, modal, field, input, textarea, select, hasRole, getActor } from '../core.js';
 import { L, tx } from '../i18n.js';
 import { flightRisk } from '../engine/talent.js';
 import { retentionEligible, buildRetentionPlan, retentionProgress } from '../engine/retention.js';
@@ -7,7 +7,7 @@ export function retentionView(el, ctx, d, evaluation = false) {
   const allPlans = d.idps.filter(p => p.mode === 'retention');
   const plans = allPlans.filter(p => !ctx.query.plan || p.id === ctx.query.plan);
   const existing = new Set(allPlans.filter(p => p.status === 'active').map(p => p.employeeId));
-  const eligible = d.active.filter(e => retentionEligible(e, today()) && !existing.has(e.id));
+  const eligible = d.active.filter(e => retentionEligible(e, today()) && !existing.has(e.id) && (hasRole('hr') || e.id !== getActor()));
   setHTML(el, html`
     ${ctx.query.plan ? html`<a class="btn btn-sm" href="#/learning/${evaluation ? 'eval' : 'idp'}?kind=retention">${L('查看全部留任计划', 'All retention plans')}</a>` : ''}
     ${callout('info', L('留任干预仅为高流失风险核心人员创建（风险分 ≥55，且绩效 ≥4 或潜力为3）。计划保存创建时的风险基线；30/60/90天回访记录用于核对落实情况，风险变化不等于干预的因果效果。', 'Create retention plans only for high-risk key talent (risk ≥55 and performance ≥4 or potential 3). Preserve the initial baseline and review delivery at days 30/60/90. Risk changes do not establish causality.'))}

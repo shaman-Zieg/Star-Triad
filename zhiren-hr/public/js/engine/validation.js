@@ -95,7 +95,7 @@ const SCHEMAS = {
   },
   raci: {
     title: required(title), titleEn: str(), roles: required(arr(str(100, 1), 30, 1)), rolesEn: arr(str(100), 30),
-    steps: required(arr(obj({ name: required(str(300, 1)), nameEn: str(300), cells: required(arr(choice(['R', 'A', 'C', 'I', '']), 30)) }), 200)),
+    steps: required(arr(obj({ name: required(str(300, 1)), nameEn: str(300), cells: required(arr(choice(['R', 'A', 'C', 'I', 'A/R', '']), 30)) }), 200)),
   },
 };
 

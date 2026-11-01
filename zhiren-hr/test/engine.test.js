@@ -200,3 +200,25 @@ test('SLA due dates and onboarding checklists', () => {
   assert.ok(list.some((t) => t.phase === 'pre' && t.due < '2026-11-02'));
   assert.ok(buildChecklist('2026-11-02', { manager: true }).length > list.length);
 });
+
+test('resume parsing does not read ordinary words as certificates or degrees', () => {
+  assert.deepEqual(parseResume('Built financial and social reports, a package for special phrases, and won a hackathon.').certs, []);
+  assert.deepEqual(parseResume('持有PMP证书。Certified CIA, CKA.').certs, ['PMP', 'CIA', 'CKA']);
+  for (const text of ['Scrum Master for three teams', 'Skilled with MS Office and MS Word', 'Reports to Ms. Wang', 'Mastered graph databases']) assert.equal(parseResume(text).education, 0, text);
+  for (const [text, level] of [['Master of Science, Fudan', 4], ["Master's degree", 4], ['Masters in CS', 4], ['M.S. in CS', 4], ['MS in CS', 4], ['MSc Finance', 4], ['硕士', 4], ['PhD in Physics', 5], ['Ph.D. candidate', 5], ['Bachelor of Arts', 3]]) assert.equal(parseResume(text).education, level, text);
+  assert.equal(parseResume('2020 - 2023 Scrum Master at Acme', new Date(2026, 2, 15)).workMonths, 48, 'a scrum master job is work, not education');
+});
+
+test('a year-only work period ending this year counts up to today', () => {
+  const march = new Date(2026, 2, 15);
+  const current = parseResume('2024 - 2026 某科技公司 工程师', march);
+  assert.deepEqual([current.jobs, current.workMonths], [1, 27]);
+  assert.equal(parseResume('2024 - 2028 某科技公司 工程师', march).jobs, 0, 'a future end year is still ignored');
+  assert.equal(parseResume('2020 - 2022 某科技公司 工程师', march).workMonths, 36);
+});
+
+test('job family matches whole Latin words, not letters inside other words', () => {
+  for (const [title, family] of [['Mobile Engineer', 'tech'], ['Senior Recruiter', 'hr'], ['Chrome Developer', 'tech'], ['Building Manager', 'general'], ['Inquiry Specialist', 'general'], ['Accounting Manager', 'finance'], ['Presales Consultant', 'sales'], ['UI Designer', 'design'], ['BI工程师', 'data'], ['HR经理', 'hr'], ['HRBP', 'hr'], ['Site Reliability Engineer', 'tech'], ['VP of Engineering', 'tech']]) {
+    assert.equal(detectFamily(title), family, title);
+  }
+});

@@ -98,8 +98,8 @@ export const TASK_NAMES = Object.keys(TASKS);
 export const MAX_INPUT_CHARS = 60_000;
 
 export function buildPrompt(task, input, lang) {
+  if (!Object.hasOwn(TASKS, task)) return null;
   const spec = TASKS[task];
-  if (!spec) return null;
   const prompt = spec.build(input || {});
   return { system: `${SYSTEM}\n\n${LANG[lang] || LANG.zh}`, prompt, effort: spec.effort };
 }

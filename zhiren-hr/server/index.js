@@ -8,6 +8,7 @@ import { initAI, aiStatus, aiRateLimited, validateTask, streamTask } from './ai.
 import { seedIfEmpty, reseed } from './seed.js';
 import { successionNominationError } from './succession-validation.js';
 import { buildRetentionPlan } from '../public/js/engine/retention.js';
+import { MODELS } from '../public/js/engine/diagnosis.js';
 import { validationErrors } from '../public/js/engine/validation.js';
 import { buildSurveyResults } from './survey-results.js';
 import { createAuth, AccessError } from './auth.js';
@@ -32,6 +33,7 @@ const SECURITY_HEADERS = {
 };
 const LOOPBACK = HOST === '127.0.0.1' || HOST === 'localhost' || HOST === '::1';
 const MAX_BODY = 1_000_000;
+const MAX_DISCARDED_BODY = 16_000_000;
 class HttpError extends Error {
   constructor(status, message) {
     super(message);
@@ -50,12 +52,17 @@ function readJson(req, { allowArray = false, maxBody = MAX_BODY } = {}) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > maxBody) {
+      if (size <= maxBody) return chunks.push(c);
+      // Read to the end without storing it, so the client can receive the 413: closing the
+      // connection mid-upload looks like a network failure. Only a huge upload is cut off.
+      chunks.length = 0;
+      if (size > MAX_DISCARDED_BODY) {
         reject(new HttpError(413, 'Request body too large'));
         req.destroy();
-      } else chunks.push(c);
+      }
     });
     req.on('end', () => {
+      if (size > maxBody) return reject(new HttpError(413, 'Request body too large'));
       if (!chunks.length) return resolve({});
       try {
         const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
@@ -84,18 +91,16 @@ function validateResponse(body) {
   const survey = db.get('surveys', String(body.surveyId || ''));
   if (!survey) throw new HttpError(400, 'Survey not found');
   if (survey.status !== 'open') throw new HttpError(400, 'This survey is closed');
+  const questions = new Set(MODELS[survey.model].dims.flatMap((dim) => dim.items.map((item) => item.id)));
   const answers = {};
   for (const [k, v] of Object.entries(body.answers || {})) {
-    if (!/^[a-z0-9_]{1,24}$/i.test(k)) continue;
-    const n = Number(v);
-    if (Number.isInteger(n) && n >= 1 && n <= 5) answers[k] = n;
+    if (questions.has(k) && Number.isInteger(v) && v >= 1 && v <= 5) answers[k] = v;
   }
   if (!Object.keys(answers).length) throw new HttpError(400, 'Please answer at least one question');
   const out = { surveyId: survey.id, answers };
   if (body.deptId && db.get('departments', String(body.deptId))) out.deptId = String(body.deptId);
-  const enps = Number(body.enps);
-  if (body.enps !== undefined && body.enps !== null && body.enps !== '' && Number.isInteger(enps) && enps >= 0 && enps <= 10) out.enps = enps;
-  if (body.comment) out.comment = String(body.comment).slice(0, 1000);
+  if (Number.isInteger(body.enps) && body.enps >= 0 && body.enps <= 10) out.enps = body.enps;
+  if (body.comment && typeof body.comment === 'string') out.comment = body.comment.slice(0, 1000);
   return out;
 }
 
@@ -112,8 +117,9 @@ async function handleApi(req, res, url, auth) {
   let body = {};
   if (method !== 'GET' && method !== 'HEAD') {
     auth.checkOrigin(req);
-    // A JSON content type forces a CORS preflight, which blocks cross-site writes.
-    if (!String(req.headers['content-type'] || '').includes('application/json')) throw new HttpError(415, 'Requests must be sent as JSON.');
+    // A JSON content type forces a CORS preflight, which blocks cross-site writes. Compare the media
+    // type itself: "text/plain; x=application/json" is a simple request that skips the preflight.
+    if (String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase() !== 'application/json') throw new HttpError(415, 'Requests must be sent as JSON.');
     const importing = parts.length === 2 && parts[0] === 'employees' && ['import-preview', 'import'].includes(parts[1]);
     body = await readJson(req, { maxBody: importing ? 2_100_000 : MAX_BODY });
   }
@@ -267,6 +273,7 @@ function serveStatic(req, res, pathname) {
   } catch {
     throw new HttpError(400, 'Bad path');
   }
+  if (rel.includes('\0')) throw new HttpError(400, 'Bad path');
   let file = path.normalize(path.join(PUBLIC_DIR, rel));
   if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) throw new HttpError(403, 'Forbidden');
   let stat = fs.statSync(file, { throwIfNoEntry: false });

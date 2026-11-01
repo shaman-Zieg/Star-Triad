@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
 import { retentionEligible } from '../public/js/engine/retention.js';
+import { buildPrompt } from '../server/prompts.js';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhiren-test-'));
 process.env.ZHIREN_DB_PATH = path.join(dir, 'test.db');
@@ -157,17 +158,24 @@ test('retired connector and analysis endpoints are unavailable without altering 
 
 test('survey responses are validated and stay anonymous', async () => {
   const surveys = (await call('GET', '/api/surveys')).data;
-  const open = surveys.find((s) => s.status === 'open');
+  const open = surveys.find((s) => s.status === 'open' && s.model === 'engagement');
   const closed = surveys.find((s) => s.status === 'closed');
   const actor = (await call('GET', '/api/employees')).data[0];
-  const ok = await call('POST', '/api/responses', { surveyId: open.id, answers: { x0: 4, bad: 9, '<script>': 3 }, enps: 8, createdBy: 'someone' }, { 'X-Actor': actor.id });
+  const ok = await call('POST', '/api/responses', { surveyId: open.id, answers: { basic0: 4, bad: 9, '<script>': 3 }, enps: 8, createdBy: 'someone' }, { 'X-Actor': actor.id });
   assert.equal(ok.status, 201);
   assert.deepEqual(ok.data, { ok: true }, 'submissions do not echo identifiable response records');
   assert.equal(ok.data.createdBy, undefined, 'responses never record who answered');
   const act = (await call('GET', '/api/activity?limit=1')).data[0];
   assert.equal(act.actor, null);
-  assert.equal((await call('POST', '/api/responses', { surveyId: closed.id, answers: { x0: 3 } })).status, 400);
+  assert.equal((await call('POST', '/api/responses', { surveyId: closed.id, answers: { basic0: 3 } })).status, 400);
   assert.equal((await call('POST', '/api/responses', { surveyId: open.id, answers: {} })).status, 400);
+  assert.equal((await call('POST', '/api/responses', { surveyId: open.id, answers: { not_a_question: 3 } })).status, 400, 'unknown question ids do not count as answers');
+  assert.equal((await call('POST', '/api/responses', { surveyId: open.id, answers: { basic0: true, basic1: [4], basic2: '5' } })).status, 400, 'answers are never coerced');
+  const count = db.count('responses');
+  assert.equal((await call('POST', '/api/responses', { surveyId: open.id, answers: { basic0: 5 }, enps: true, comment: { a: 1 } })).status, 201);
+  const stored = db.list('responses').at(-1);
+  assert.equal(db.count('responses'), count + 1);
+  assert.deepEqual([stored.enps, stored.comment], [undefined, undefined], 'invalid optional fields are dropped');
   assert.equal(act.docId, null);
   assert.equal((await call('PUT', '/api/responses/any-response', { answers: {} })).status, 405);
 });
@@ -211,3 +219,37 @@ test('rejects non-JSON writes, unknown collections and foreign hosts', async () 
   assert.equal((await fetch(`${base}/../server/db.js`)).status !== 200, true);
 });
 
+
+test('only a real JSON media type can write, so cross-site simple requests are refused', async () => {
+  const before = db.count('kb');
+  const article = { title: 'Planted', category: 'daily', body: 'planted' };
+  for (const type of ['text/plain; x=application/json', 'text/plain;application/json', 'application/x-www-form-urlencoded; application/json', 'text/plain']) {
+    assert.equal((await call('POST', '/api/kb', article, { 'Content-Type': type })).status, 415, type);
+  }
+  assert.equal((await call('POST', '/api/admin/reset', {}, { 'Content-Type': 'text/plain; x=application/json' })).status, 415);
+  assert.equal(db.count('kb'), before);
+  const saved = await call('POST', '/api/kb', article, { 'Content-Type': 'Application/JSON; charset=utf-8' });
+  assert.equal(saved.status, 201);
+  db.remove('kb', saved.data.id);
+});
+
+test('an oversized body gets a JSON 413 instead of a dropped connection', async () => {
+  const result = await call('POST', '/api/kb', { title: 'x', category: 'daily', body: 'y'.repeat(1_200_000) });
+  assert.equal(result.status, 413);
+  assert.match(result.data.error, /too large/);
+});
+
+test('a NUL byte in a static path is a bad request, not a server error', async () => {
+  for (const path of ['/%00', '/js/%00.js']) assert.equal((await fetch(base + path)).status, 400, path);
+});
+
+test('the A/R cell offered by the RACI editor can be saved', async () => {
+  const matrix = db.list('raci')[0];
+  const steps = structuredClone(matrix.steps);
+  steps[0].cells[0] = 'A/R';
+  assert.equal((await call('PUT', `/api/raci/${matrix.id}`, { steps })).status, 200);
+});
+
+test('AI task names cannot resolve to inherited object properties', () => {
+  for (const task of ['constructor', 'toString', '__proto__']) assert.equal(buildPrompt(task, {}, 'zh'), null, task);
+});

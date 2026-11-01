@@ -90,3 +90,9 @@ test('unknown and prototype keys are rejected without mutation or unbounded trav
   assert.ok(validationErrors('unknown', {}).length);
   invalid('candidates', { notes: Array(501).fill({}) }, 'array');
 });
+
+test('RACI cells accept the combined A/R role', () => {
+  const matrix = { title: 'Process', roles: ['Owner'], steps: [{ name: 'Step', cells: ['A/R'] }] };
+  assert.deepEqual(validationErrors('raci', matrix), []);
+  assert.ok(validationErrors('raci', { ...matrix, steps: [{ name: 'Step', cells: ['R/A'] }] }).length);
+});

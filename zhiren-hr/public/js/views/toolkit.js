@@ -1,5 +1,5 @@
 // HR toolkit: a methodology library that links each method to its tool, plus calculators.
-import { html, setHTML, icon, fmt, today, load, pageHead, field, input, select, method, callout, badge, on } from '../core.js';
+import { html, setHTML, icon, fmt, today, load, pageHead, field, input, select, method, callout, badge, on, hasRole } from '../core.js';
 import { L, tx } from '../i18n.js';
 import { annualLeave, overtimePay, salaryBand, compaRatio, turnover, recruitingFunnel, headcountPlan, trailingTurnover, funnelRates, openSeats } from '../engine/calc.js';
 import { hbars } from '../charts.js';
@@ -81,7 +81,8 @@ export default async function toolkit(el, ctx) {
 
 // Turnover, headcount and funnel start from the company's own records (same basis as the dashboard).
 async function liveData(key) {
-  if (!['turnover', 'headcount', 'funnel'].includes(key)) return null;
+  // Other roles only receive part of these records, so company-wide figures would be wrong for them.
+  if (!hasRole('hr') || !['turnover', 'headcount', 'funnel'].includes(key)) return null;
   const d = await load('employees', 'positions', 'candidates');
   return { tt: trailingTurnover(d.employees, today()), seats: openSeats(d.positions, d.candidates), rates: funnelRates(d.candidates) };
 }

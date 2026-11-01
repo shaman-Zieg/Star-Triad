@@ -18,7 +18,8 @@ export function visible(col, doc, user) {
     case 'employees': case 'departments': case 'positions': case 'courses': case 'kb': case 'raci': return true;
     case 'candidates': return (doc.interviews || []).some(i => i.interviewerId === user.employeeId);
     case 'tickets': return doc.requesterId === user.employeeId || doc.assigneeId === user.employeeId;
-    case 'idps': return (user.role === 'manager' || doc.mode !== 'retention') && employeeInScope(db.get('employees', doc.employeeId), user);
+    // A retention plan records that someone is a flight risk, so it is never shown to that person.
+    case 'idps': return (doc.mode !== 'retention' || (user.role === 'manager' && doc.employeeId !== user.employeeId)) && employeeInScope(db.get('employees', doc.employeeId), user);
     case 'enrollments': return employeeInScope(db.get('employees', doc.employeeId), user);
     case 'onboarding': return doc.buddyId === user.employeeId || employeeInScope(db.get('employees', doc.employeeId), user);
     // Succession nominations and company-wide survey results remain HR-only.
@@ -86,7 +87,10 @@ export function authorizeWrite(col, method, body, previous, user) {
     if (typeof employeeId !== 'string' || !/^[a-z0-9]{1,24}$/i.test(employeeId)) deny();
     if (!employeeInScope(db.get('employees', employeeId), user)) deny();
     if (user.role === 'manager') {
-      if (method === 'POST' && body.mode === 'retention') return { employeeId, mode: 'retention' };
+      if (method === 'POST' && body.mode === 'retention') {
+        if (employeeId === user.employeeId) deny();
+        return { employeeId, mode: 'retention' };
+      }
       only(body, method === 'POST' ? ['employeeId', 'period', 'status', 'mode', 'focus', 'name', 'nameEn'] : ['focus', 'actions', 'reviews', 'status']);
       return body;
     }

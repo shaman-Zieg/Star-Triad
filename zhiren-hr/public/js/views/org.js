@@ -177,14 +177,15 @@ async function structureView(el) {
   const d = await load('employees', 'departments');
   const T = today();
   const active = d.employees.filter((e) => e.status !== 'left');
+  const byIdMap = byId(active);
   const kids = {};
-  for (const e of active) (kids[e.managerId || 'root'] ||= []).push(e);
+  // Someone whose manager has left starts a branch of their own, so they stay on the chart.
+  for (const e of active) (kids[byIdMap[e.managerId] ? e.managerId : 'root'] ||= []).push(e);
   const roots = kids.root || [];
   const managers = active.filter((e) => (kids[e.id] || []).length);
   const spans = managers.map((m) => kids[m.id].length);
   const avgSpan = spans.length ? (spans.reduce((a, b) => a + b, 0) / spans.length).toFixed(1) : '—';
   const depth = (e, n = 1) => (e.managerId && byIdMap[e.managerId] ? depth(byIdMap[e.managerId], n + 1) : n);
-  const byIdMap = byId(active);
   const layers = Math.max(...active.map((e) => depth(e)));
   const tenure = active.map((e) => daysBetween(e.hireDate, T) / 365);
   const avgTenure = (tenure.reduce((a, b) => a + b, 0) / (tenure.length || 1)).toFixed(1);

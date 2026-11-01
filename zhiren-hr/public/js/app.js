@@ -262,17 +262,22 @@ async function route() {
     setHTML(view, empty(L('页面不存在', 'Page not found'), '', 'alert', html`<a class="btn" href="#/">${L('返回工作台', 'Back to dashboard')}</a>`));
     return;
   }
-  setHTML(view, loading());
+  // Each render gets its own element: a slower earlier render then writes to a detached
+  // element instead of replacing the current page, and its listeners go away with it.
+  const host = document.createElement('div');
+  setHTML(host, loading());
+  view.replaceChildren(host);
   try {
     const m = await mod.load();
     if (token !== state.renderToken) return;
-    await m.default(view, { ...r, rerender: () => route() });
+    await m.default(host, { ...r, rerender: () => route() });
+    if (token !== state.renderToken) return;
     document.title = `${L(...mod.name)} · ${L('知人', 'Zhiren')}`;
   } catch (err) {
     console.error(err);
     if (token === state.renderToken) {
-      setHTML(view, empty(L('加载失败', 'Could not load this page'), err.message, 'alert', html`<button class="btn" type="button" data-retry>${L('重试', 'Retry')}</button>`));
-      view.querySelector('[data-retry]').addEventListener('click', () => route());
+      setHTML(host, empty(L('加载失败', 'Could not load this page'), err.message, 'alert', html`<button class="btn" type="button" data-retry>${L('重试', 'Retry')}</button>`));
+      host.querySelector('[data-retry]').addEventListener('click', () => route());
     }
   }
   refreshShellData();
@@ -346,7 +351,7 @@ function loginView() {
 }
 function personalHome(view) {
   const me = state.employees.find(e => e.id === getActor());
-  setHTML(view, html`<h1>${L('我的工作台', 'My workspace')}</h1><p class="page-sub">${me ? personName(me) : getAuth().user.username} · ${roleName(getAuth().user.role)}</p><div class="card"><p>${L('员工敏感资料和工作记录仅显示你有权访问的范围。', 'Sensitive employee information and work records are limited to your access scope.')}</p><div class="row" style="margin-top:16px;flex-wrap:wrap"><a class="btn" href="#/service/people/${getActor()}">${L('我的资料', 'My profile')}</a><a class="btn" href="#/service/requests?filter=mine">${L('我的服务申请', 'My requests')}</a><a class="btn" href="#/learning/idp">${L('发展计划', 'Development plans')}</a><a class="btn" href="#/recruit/pipeline">${L('分配给我的面试', 'Assigned interviews')}</a></div></div>`);
+  setHTML(view, html`<h1>${L('我的工作台', 'My workspace')}</h1><p class="page-sub">${me ? personName(me) : getAuth().user.username} · ${roleName(getAuth().user.role)}</p><div class="card"><p>${L('员工敏感资料和工作记录仅显示你有权访问的范围。', 'Sensitive employee information and work records are limited to your access scope.')}</p><div class="row" style="margin-top:16px;flex-wrap:wrap"><a class="btn" href="#/service/people/${getActor()}">${L('我的资料', 'My profile')}</a><a class="btn" href="#/service/requests?f=mine">${L('我的服务申请', 'My requests')}</a><a class="btn" href="#/learning/idp">${L('发展计划', 'Development plans')}</a><a class="btn" href="#/recruit/pipeline">${L('分配给我的面试', 'Assigned interviews')}</a></div></div>`);
 }
 
 // Lets views refresh the cached employee list after edits.

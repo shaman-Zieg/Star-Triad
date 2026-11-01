@@ -1,7 +1,7 @@
 // Employee services: directory and profiles, service requests, the policy library with its HR assistant, and onboarding.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, daysBetween, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, toast, act, field, input, textarea, select, on, meter, method, getActor, nowStamp, hasRole,
+  modal, toast, act, field, input, textarea, select, on, meter, method, getActor, nowStamp, hasRole, wireSearchBox,
 } from '../core.js';
 import { L, tx, loc, lang, LOCATIONS, LEAVE_REASONS, ENROLL_STATUS, RISK_LEVEL } from '../i18n.js';
 import {
@@ -10,6 +10,7 @@ import {
 import { COMPETENCIES, LEVELS, targetProfile } from '../engine/competency.js';
 import { BOXES, boxKey, flightRisk, PERF_SCALE } from '../engine/talent.js';
 import { idpProgress } from '../engine/learning.js';
+import { skillLabel } from '../engine/skills.js';
 import { radar } from '../charts.js';
 import { md, mdToHtml } from '../md.js';
 import { aiEnabled, streamAI } from '../ai.js';
@@ -62,8 +63,8 @@ function employeeForm(e, d, onSaved) {
       ${field(L('状态', 'Status'), select('status', [['active', L('在职', 'Active')], ['left', L('已离职', 'Left')]], { value: e.status || 'active' }))}
       ${field(L('离职日期', 'Leave date'), input('leaveDate', { type: 'date', value: e.leaveDate }))}
       ${field(L('离职原因', 'Leave reason'), select('leaveReason', Object.entries(LEAVE_REASONS).map(([k, v]) => [k, tx(v)]), { value: e.leaveReason, placeholder: '—' }))}
-      ${field(L('薪酬比较比率', 'Compa-ratio'), input('compaRatio', { type: 'number', step: 0.01, min: 0.5, max: 1.5, value: e.compaRatio ?? 1 }), { hint: L('实际薪酬 ÷ 薪级中位值', 'Pay ÷ band midpoint') })}
-      ${field(L('敬业度（上级评估，1-5）', 'Engagement (manager rating, 1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: e.engagement ?? 4 }), { hint: L('用于流失风险评估；不来自匿名调研，调研从不记录个人答卷', 'Feeds the flight-risk score. Not taken from the anonymous surveys, which never record who answered') })}
+      ${field(L('薪酬比较比率', 'Compa-ratio'), input('compaRatio', { type: 'number', step: 0.01, min: 0.5, max: 1.5, value: isNew ? 1 : e.compaRatio }), { hint: L('实际薪酬 ÷ 薪级中位值', 'Pay ÷ band midpoint') })}
+      ${field(L('敬业度（上级评估，1-5）', 'Engagement (manager rating, 1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: isNew ? 4 : e.engagement }), { hint: L('用于流失风险评估；不来自匿名调研，调研从不记录个人答卷', 'Feeds the flight-risk score. Not taken from the anonymous surveys, which never record who answered') })}
     </div>`,
     onSubmit: async (v) => {
       if (!v.name.trim() || !v.title.trim()) throw new Error(L('请填写姓名和职位', 'Name and job title are required'));
@@ -73,11 +74,12 @@ function employeeForm(e, d, onSaved) {
         level: v.level, deptId: v.deptId, managerId: v.managerId || null, location: v.location, hireDate: v.hireDate, status: v.status,
         leaveDate: v.status === 'left' ? v.leaveDate : null, leaveReason: v.status === 'left' ? v.leaveReason || null : null,
         leaveType: v.status === 'left' ? (v.leaveReason === 'performance' ? 'involuntary' : 'voluntary') : null,
-        compaRatio: Number(v.compaRatio) || 1, engagement: Number(v.engagement) || 3,
+        // A blank stays unassessed: it must not turn into a rating that feeds the flight-risk score.
+        compaRatio: v.compaRatio === '' ? null : Number(v.compaRatio), engagement: v.engagement === '' ? null : Number(v.engagement),
       };
       // New records start unassessed rather than with invented competency ratings.
       if (isNew) Object.assign(doc, { performance: 3, potential: 2, perfHistory: [], skills: [], lastPromotion: v.hireDate, competencies: null });
-      if (!isNew && v.managerId !== e.managerId) doc.managerChanged = true;
+      if (!isNew && (v.managerId || null) !== (e.managerId || null)) doc.managerChanged = true;
       const saved = isNew ? await api.post('/api/employees', doc) : await api.put(`/api/employees/${e.id}`, doc);
       await reloadEmployees();
       toast(L('档案已保存', 'Record saved'));
@@ -112,11 +114,7 @@ async function peopleView(el, ctx) {
   };
   el.querySelector('#dept').addEventListener('change', (e) => go({ dept: e.target.value }));
   el.querySelector('[data-import-employees]')?.addEventListener('click', () => openEmployeeImport(async () => { await reloadEmployees(); ctx.rerender(); }));
-  let t;
-  el.querySelector('#q').addEventListener('input', (e) => {
-    clearTimeout(t);
-    t = setTimeout(() => go({ q: e.target.value }), 350);
-  });
+  wireSearchBox(el.querySelector('#q'), (value) => go({ q: value }));
   on(el, 'click', '[data-status]', (e, b) => go({ status: b.dataset.status }));
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
   on(el, 'click', '[data-new]', () => employeeForm({}, d, (s) => { location.hash = `#/service/people/${s.id}`; }));
@@ -130,7 +128,8 @@ async function profile(el, ctx, d) {
   const emp = byId(d.employees);
   const reports = d.employees.filter((x) => x.managerId === e.id && x.status !== 'left');
   const b = BOXES[boxKey(e.performance, e.potential)];
-  const risk = flightRisk(e, today());
+  // Like retention plans, a flight-risk label is for HR and managers, not the person it describes.
+  const risk = hasRole('hr') || (hasRole('manager') && e.id !== getActor()) ? flightRisk(e, today()) : null;
   const enrolls = more.enrollments.filter((x) => x.employeeId === e.id);
   const idp = more.idps.find((x) => x.employeeId === e.id && x.mode !== 'retention');
   const tickets = more.tickets.filter((x) => x.requesterId === e.id);
@@ -150,7 +149,7 @@ async function profile(el, ctx, d) {
           <dt>${L('直接下属', 'Direct reports')}</dt><dd>${reports.length}</dd>
           <dt>${L('上次晋升', 'Last promotion')}</dt><dd>${fmt.date(e.lastPromotion)}</dd>
           ${e.status === 'left' ? html`<dt>${L('离职', 'Left')}</dt><dd>${fmt.date(e.leaveDate)} · ${tx(LEAVE_REASONS[e.leaveReason] || ['—', '—'])}</dd>` : ''}</dl>
-        ${(e.skills || []).length ? html`<div class="section-title">${L('技能标签', 'Skills')}</div><div>${e.skills.map((s) => html`<span class="tag">${s}</span>`)}</div>` : ''}
+        ${(e.skills || []).length ? html`<div class="section-title">${L('技能标签', 'Skills')}</div><div>${e.skills.map((s) => html`<span class="tag">${skillLabel(s, lang())}</span>`)}</div>` : ''}
         ${reports.length ? html`<div class="section-title">${L('团队成员', 'Team')}</div>${reports.map((r) => html`<div style="margin:6px 0">${personLink(r)}</div>`)}` : ''}</section>
       <section class="card"><div class="card-head"><h2>${L('人才画像', 'Talent profile')}</h2><a class="btn btn-sm" href="#/talent/competency?emp=${e.id}">${L('详情', 'Details')}</a></div>
         <div class="row" style="margin-bottom:8px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('待评估', 'Not assessed'))}${badge(`${L('绩效', 'Perf')} ${e.performance ?? '—'} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential ?? '—'}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
@@ -245,13 +244,11 @@ async function ticketDetail(el, ctx, d, emp) {
     </div>`);
   const save = (patch, msg) => act(null, () => api.put(`/api/tickets/${t.id}`, patch), msg).then(() => ctx.rerender());
   el.querySelector('#assignee').addEventListener('change', (e) => save({ assigneeId: e.target.value || null, ...(t.status === 'open' && e.target.value && { status: 'in_progress' }) }, L('已分配', 'Assigned')));
-  el.querySelector('#status').addEventListener('change', (e) => save({ status: e.target.value, ...(e.target.value === 'resolved' && { resolvedAt: today() }) }, L('状态已更新', 'Status updated')));
+  el.querySelector('#status').addEventListener('change', (e) => save({ status: e.target.value, resolvedAt: e.target.value === 'resolved' ? today() : null }, L('状态已更新', 'Status updated')));
   const reply = async (resolve) => {
     const text = el.querySelector('#reply').text.value.trim();
     if (!text && !resolve) return;
-    const comments = [...(t.comments || [])];
-    if (text) comments.push({ by: getActor(), at: nowStamp(), text });
-    const patch = { comments };
+    const patch = text ? { comments: [...(t.comments || []), { by: getActor(), at: nowStamp(), text }] } : {};
     if (resolve) Object.assign(patch, { status: 'resolved', resolvedAt: today() });
     else if (t.status === 'open' && getActor() !== t.requesterId) Object.assign(patch, { status: 'in_progress', assigneeId: t.assigneeId || getActor() });
     await save(patch, resolve ? L('已标记解决', 'Resolved') : L('已回复', 'Reply sent'));

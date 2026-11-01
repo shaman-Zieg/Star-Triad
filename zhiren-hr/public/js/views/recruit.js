@@ -3,7 +3,7 @@ import { hiringGap, crossRoleRecommendations } from '../engine/cross-role.js';
 // batch resume screening, structured interview kits and the JD builder.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, daysBetween, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, confirmDialog, toast, act, nowStamp, field, input, textarea, select, wireChips, likert, list, on, getActor, scoreRing, meter, method, copyText, download, hasRole,
+  modal, confirmDialog, toast, act, nowStamp, field, input, textarea, select, wireChips, likert, list, on, getActor, scoreRing, meter, method, copyText, download, hasRole, wireSearchBox,
 } from '../core.js';
 import { L, tx, loc, lang, STAGES, STAGE_ORDER, SOURCES, REJECT_REASONS, POSITION_STATUS, PRIORITY, LOCATIONS } from '../i18n.js';
 import { SKILLS, SKILL_FAMILIES, skillLabel } from '../engine/skills.js';
@@ -89,6 +89,7 @@ function positionForm(p, d, onSaved) {
     </div>`,
     onSubmit: async (v) => {
       if (!v.title.trim()) throw new Error(L('请填写职位名称', 'Job title is required'));
+      if (Boolean(Number(v.salaryMin)) !== Boolean(Number(v.salaryMax))) throw new Error(L('请同时填写月薪上下限，或都留空', 'Enter both pay limits or leave both blank'));
       const doc = {
         title: v.title.trim(), titleEn: v.titleEn.trim() || v.title.trim(), deptId: v.deptId, level: v.level, headcount: Number(v.headcount) || 1,
         priority: v.priority, minYears: Number(v.minYears) || 0, maxYears: (Number(v.minYears) || 0) + 6, education: Number(v.education) || 0,
@@ -243,11 +244,7 @@ async function pipelineView(el, ctx, d) {
     location.hash = `#/recruit/pipeline${qs.toString() ? `?${qs}` : ''}`;
   };
   el.querySelector('#pos-filter').addEventListener('change', (e) => go({ pos: e.target.value }));
-  let t;
-  el.querySelector('#cand-q').addEventListener('input', (e) => {
-    clearTimeout(t);
-    t = setTimeout(() => go({ q: e.target.value }), 350);
-  });
+  wireSearchBox(el.querySelector('#cand-q'), (value) => go({ q: value }));
   on(el, 'click', '[data-add]', () => addCandidate(d, posFilter || d.positions.find((p) => p.status === 'open')?.id, () => ctx.rerender()));
   on(el, 'keydown', '.cand', (e, c) => { if (e.key === 'Enter') location.hash = `#/recruit/pipeline/${c.dataset.id}`; });
   on(el, 'click', '.cand', (e, c) => { if (!e.target.closest('a')) location.hash = `#/recruit/pipeline/${c.dataset.id}`; });
@@ -314,13 +311,14 @@ async function moveStage(c, stage, d) {
     });
     if (!ok) return false;
   }
-  await act(null, () => api.put(`/api/candidates/${c.id}`, patch), L(`已移动到「${tx(STAGES[stage])}」`, `Moved to ${tx(STAGES[stage])}`));
+  const saved = await act(null, () => api.put(`/api/candidates/${c.id}`, patch), L(`已移动到「${tx(STAGES[stage])}」`, `Moved to ${tx(STAGES[stage])}`));
+  if (!saved) return false;
   if (stage === 'hired' && pos) {
     const yes = await confirmDialog(L(`是否同时为 ${personName(c)} 创建员工档案和入职计划？`, `Also create an employee record and onboarding plan for ${personName(c)}?`), { title: L('录用成功', 'Hired'), confirmLabel: L('创建', 'Create') });
-    if (yes) await createEmployeeFromCandidate(c, pos);
+    if (yes) await act(null, () => createEmployeeFromCandidate(c, pos));
     const hiredCount = d.candidates.filter((x) => x.positionId === pos.id && (x.stage === 'hired' || x.id === c.id)).length;
     if (hiredCount >= pos.headcount && pos.status === 'open' && await confirmDialog(L('该职位招聘人数已满，是否关闭职位？', 'All openings are filled. Close the job?'), { confirmLabel: L('关闭职位', 'Close job') })) {
-      await api.put(`/api/positions/${pos.id}`, { status: 'closed', closedAt: today() });
+      await act(null, () => api.put(`/api/positions/${pos.id}`, { status: 'closed', closedAt: today() }));
     }
   }
   return true;
@@ -619,7 +617,7 @@ async function interviewView(el, ctx, d) {
   on(el, 'click', '[data-print]', () => window.print());
   mountReport(el.querySelector('#ai-interview'), {
     title: L('定制面试题', 'Tailored questions'),
-    ruleMd: L('上方题目来自内置题库（每项能力 3 题）。点击「AI 深度分析」可基于岗位要求生成更有针对性的问题与追问。', 'The questions above come from the built-in bank (3 per competency). Use AI analysis to tailor questions and probes to this role.'),
+    ruleMd: L('上方题目来自内置题库（每项能力 2 题）。点击「AI 深度分析」可基于岗位要求生成更有针对性的问题与追问。', 'The questions above come from the built-in bank (2 per competency). Use AI analysis to tailor questions and probes to this role.'),
     task: 'interview',
     aiLabel: L('AI 定制题目', 'Tailor with AI'),
     input: () => ({ title: pos?.title, level: pos?.level, skills: (pos?.skills || []).map((k) => skillLabel(k, 'en')), focusCompetencies: plan.focus.map((k) => compByKey[k].name[1]) }),

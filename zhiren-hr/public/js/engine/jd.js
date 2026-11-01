@@ -10,18 +10,23 @@ export const FAMILIES = {
   product: { name: ['产品', 'Product'], keywords: ['产品', 'product'] },
   design: { name: ['设计', 'Design'], keywords: ['设计', 'designer', 'ux', 'ui'] },
   marketing: { name: ['市场营销', 'Marketing'], keywords: ['市场', '品牌', '营销', '新媒体', 'marketing', 'brand', 'growth', 'content'] },
-  sales: { name: ['销售与商务', 'Sales & BD'], keywords: ['销售', '客户经理', '商务', 'bd', 'sales', 'account', 'business development'] },
-  hr: { name: ['人力资源', 'Human resources'], keywords: ['人力', '人事', '招聘', 'hr', '培训', '薪酬', 'talent', 'people', 'recruit'] },
-  finance: { name: ['财务', 'Finance'], keywords: ['财务', '会计', '审计', '税务', 'finance', 'accountant', 'fp&a', 'controller', 'audit'] },
+  sales: { name: ['销售与商务', 'Sales & BD'], keywords: ['销售', '客户经理', '商务', 'bd', 'sales', 'presales', 'account', 'business development'] },
+  hr: { name: ['人力资源', 'Human resources'], keywords: ['人力', '人事', '招聘', 'hr', 'hrbp', '培训', '薪酬', 'talent', 'people', 'recruit'] },
+  finance: { name: ['财务', 'Finance'], keywords: ['财务', '会计', '审计', '税务', 'finance', 'accountant', 'accounting', 'fp&a', 'controller', 'audit'] },
   ops: { name: ['运营与客户', 'Operations & customer'], keywords: ['运营', '客户成功', '客服', '项目', '供应链', '采购', 'operations', 'customer', 'project', 'supply'] },
   general: { name: ['通用', 'General'], keywords: [] },
 };
+
+// Latin keywords must start a word, and short ones must be the whole word, so "bi" is not found
+// in "Mobile" or "ui" in "Recruiter" while "recruit" still finds "Recruiter". CJK keywords match as substrings.
+const keywordPattern = (k) => (/[a-z]/.test(k) ? `(?<![a-z0-9])${k}${k.length <= 3 ? '(?![a-z0-9])' : ''}` : k);
+const FAMILY_MATCHERS = Object.fromEntries(Object.entries(FAMILIES).filter(([, f]) => f.keywords.length).map(([key, f]) => [key, new RegExp(f.keywords.map(keywordPattern).join('|'))]));
 
 export function detectFamily(title = '') {
   const t = String(title).toLowerCase();
   // Data before tech so "数据开发工程师" is classed as data.
   for (const key of ['data', 'product', 'design', 'hr', 'finance', 'marketing', 'sales', 'ops', 'tech']) {
-    if (FAMILIES[key].keywords.some((k) => t.includes(k))) return key;
+    if (FAMILY_MATCHERS[key].test(t)) return key;
   }
   return 'general';
 }

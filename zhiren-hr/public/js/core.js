@@ -167,6 +167,7 @@ const ICONS = {
   send: '<path d="M4 12l16-8-6 16-3-7z"/>',
   help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.6 2.6 0 0 1 5 .8c0 1.8-2.5 2.2-2.5 4"/><circle cx="12" cy="17.2" r=".7" fill="currentColor"/>',
   refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 5v6h-6"/>',
+  upload: '<path d="M12 20V9M7 14l5-5 5 5M4 4h16"/>',
 };
 export const icon = (name, cls = '') => raw(
   `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`,
@@ -263,6 +264,28 @@ export function on(root, event, selector, handler) {
     const el = e.target.closest(selector);
     if (el && root.contains(el)) handler(e, el);
   });
+}
+
+// A search box that filters through the URL re-renders its view, so the cursor is put back afterwards.
+// Waits for IME composition to finish, otherwise half-typed pinyin would be searched and interrupted.
+let refocusSearch = null;
+export function wireSearchBox(box, onSearch, delay = 350) {
+  if (refocusSearch === box.id) {
+    refocusSearch = null;
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
+  }
+  let timer;
+  const schedule = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (!box.isConnected) return;
+      refocusSearch = box.id;
+      onSearch(box.value);
+    }, delay);
+  };
+  box.addEventListener('input', (e) => { if (!e.isComposing) schedule(); });
+  box.addEventListener('compositionend', schedule);
 }
 
 // Runs an async action with the trigger disabled; shows a toast on success or failure.

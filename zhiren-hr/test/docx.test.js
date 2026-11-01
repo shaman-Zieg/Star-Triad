@@ -134,3 +134,15 @@ test('rejects wrong XML roots, parser errors, image-only documents and excessive
   assert.throws(() => wordDocumentText(dom([p(t('x'.repeat(DOCX_LIMITS.textChars + 1)))])), /200000/);
   if (typeof DOMParser === 'undefined') await assert.rejects(readDocx(documentZip()), /cannot parse Word XML/);
 });
+
+test('empty table cells, tab-stop definitions and text-box fallbacks do not distort the text', () => {
+  const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+  const cell = (...children) => element('tc', children);
+  const table = element('tbl', [element('tr', [cell(p(t('A'))), cell(p(t('B')))]), element('tr', [cell(element('p')), cell(p(t('C')))])]);
+  assert.equal(wordDocumentText(dom([table])), 'A\tB\n\tC', 'a row starting with an empty cell stays on its own line');
+  const tabStops = element('pPr', [element('tabs', [element('tab')])]);
+  assert.equal(wordDocumentText(dom([p(t('A')), element('p', [tabStops, element('r', [t('B')])])])), 'A\nB', 'tab-stop definitions are not tabs');
+  const box = () => element('txbxContent', [p(t('2019-2021 Acme'))]);
+  const alternate = element('AlternateContent', [element('Choice', [box()], '', MC), element('Fallback', [box()], '', MC)], '', MC);
+  assert.equal(wordDocumentText(dom([p(alternate)])), '2019-2021 Acme', 'a text box is read once');
+});

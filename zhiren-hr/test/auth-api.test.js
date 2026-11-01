@@ -134,3 +134,25 @@ test('employee imports require HR on both preview and save endpoints', async () 
   assert.equal((await call('POST', '/api/employees/import', { csv }, cookies.hr)).status, 201);
   assert.equal(db.count('employees'), before + 1);
 });
+
+test('a retention plan is hidden from the person it describes, whatever their role', async () => {
+  const [, manager, employee] = accounts;
+  const plan = (employeeId) => db.insert('idps', { employeeId, mode: 'retention', status: 'active', startedAt: '2026-10-01', reviewDue: '2026-12-30', baseline: { score: 70, engagement: 2, factors: [] }, actions: [], reviews: [] });
+  const own = plan(manager.employeeId), report = plan(employee.employeeId);
+  assert.equal((await call('GET', `/api/idps/${own.id}`, undefined, cookies.manager)).status, 404);
+  assert.equal((await call('GET', `/api/idps/${report.id}`, undefined, cookies.manager)).status, 200);
+  assert.equal((await call('GET', `/api/idps/${report.id}`, undefined, cookies.employee)).status, 404);
+  assert.equal((await call('PUT', `/api/idps/${own.id}`, { status: 'completed' }, cookies.manager)).status, 403);
+  assert.equal((await call('POST', '/api/idps', { employeeId: manager.employeeId, mode: 'retention' }, cookies.manager)).status, 403);
+  assert.equal((await call('GET', `/api/idps/${own.id}`, undefined, cookies.hr)).status, 200);
+  db.remove('idps', own.id);
+  db.remove('idps', report.id);
+});
+
+test('a requester can resolve their own request without adding a reply', async () => {
+  const ticket = db.insert('tickets', { type: 'other', title: 'Resolve me', status: 'open', requesterId: accounts[2].employeeId, assigneeId: null, comments: [] });
+  const result = await call('PUT', `/api/tickets/${ticket.id}`, { status: 'resolved', resolvedAt: '2026-10-21' }, cookies.employee);
+  assert.equal(result.status, 200);
+  assert.equal(result.data.status, 'resolved');
+  db.remove('tickets', ticket.id);
+});

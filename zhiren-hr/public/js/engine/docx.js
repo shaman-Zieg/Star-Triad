@@ -4,6 +4,7 @@
 // Raw DEFLATE: https://compression.spec.whatwg.org/
 export const DOCX_LIMITS = Object.freeze({ fileBytes: 10 * 1024 * 1024, entries: 512, xmlBytes: 2 * 1024 * 1024, totalBytes: 50 * 1024 * 1024, textChars: 200000 });
 const WORD_NS = new Set(['http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'http://purl.oclc.org/ooxml/wordprocessingml/main']);
+const COMPATIBILITY_NS = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 const fail = message => { throw new Error(`DOCX: ${message}`); };
 const crcTable = Uint32Array.from({ length: 256 }, (_, i) => {
   let crc = i;
@@ -156,30 +157,33 @@ export async function readDocumentXml(input) {
 export function wordDocumentText(document) {
   const root = document.documentElement;
   if (!root || root.localName !== 'document' || !WORD_NS.has(root.namespaceURI) || document.getElementsByTagName('parsererror').length) fail('Malformed Word document XML.');
-  const output = [], stack = [[root, false]];
+  const output = [], stack = [[root, false, 0]];
   let length = 0;
   const add = text => {
     length += text.length;
     if (length > DOCX_LIMITS.textChars) fail('Resume text exceeds 200000 characters.');
     output.push(text);
   };
-  const trimEnd = character => {
-    while (output.length && (output.at(-1) === character || !output.at(-1))) { length -= output.pop().length; }
+  // Only trims what this cell or row added, so an empty cell cannot swallow the previous row's line break.
+  const trimEnd = (character, start) => {
+    while (output.length > start && (output.at(-1) === character || !output.at(-1))) { length -= output.pop().length; }
   };
   while (stack.length) {
-    const [node, closing] = stack.pop();
+    const [node, closing, start] = stack.pop();
     const word = WORD_NS.has(node.namespaceURI), name = node.localName;
     if (closing) {
       if (word && name === 'p') add('\n');
-      if (word && name === 'tc') { trimEnd('\n'); add('\t'); }
-      if (word && name === 'tr') { trimEnd('\t'); add('\n'); }
+      if (word && name === 'tc') { trimEnd('\n', start); add('\t'); }
+      if (word && name === 'tr') { trimEnd('\t', start); add('\n'); }
       continue;
     }
-    if (word && ['del', 'moveFrom', 'instrText'].includes(name)) continue;
+    // A text box is stored twice, as drawing and legacy fallback; properties hold tab-stop definitions, not text.
+    if (node.namespaceURI === COMPATIBILITY_NS && name === 'Fallback') continue;
+    if (word && ['del', 'moveFrom', 'instrText', 'pPr', 'rPr'].includes(name)) continue;
     if (word && name === 't') { add(node.textContent || ''); continue; }
     if (word && ['tab', 'br', 'cr'].includes(name)) { add(name === 'tab' ? '\t' : '\n'); continue; }
-    stack.push([node, true]);
-    for (let child = node.lastElementChild; child; child = child.previousElementSibling) stack.push([child, false]);
+    stack.push([node, true, output.length]);
+    for (let child = node.lastElementChild; child; child = child.previousElementSibling) stack.push([child, false, 0]);
   }
   const text = output.join('').replace(/\r\n?/g, '\n').trim();
   if (!text) fail('No readable text found. Image-only resumes need text pasted manually.');

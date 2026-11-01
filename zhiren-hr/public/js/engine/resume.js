@@ -15,8 +15,10 @@ export const EDUCATION = [
 ];
 
 const EDU_PATTERNS = [
-  [5, /博士|ph\.?\s?d|doctor(ate)?\b/i],
-  [4, /硕士|研究生|master|\bmba\b|\bm\.?s\.?c?\b|\bmsc\b|\bm\.?eng\b/i],
+  [5, /博士|\bph\.?\s?d\b|doctor(ate)?\b/i],
+  [4, /硕士|研究生|(?<!scrum\s)\bmaster(?:'s|s)?\b|\bmba\b|\bmsc\b|\bm\.?eng\b/i],
+  // Case-sensitive, so "Ms. Wang" and "MS Office" are not read as a master's degree.
+  [4, /\bM\.?S\.?c?\b(?!\s*(?:Office|Word|Excel|PowerPoint|Outlook|Project|Visio|Access|Teams|SQL|Azure))/],
   [3, /本科|学士|bachelor|\bb\.?s\.?c?\b|\bb\.?a\.?\b|\bb\.?eng\b|统招/i],
   [2, /大专|专科|associate degree|college diploma|高职/i],
   [1, /高中|中专|技校|high school/i],
@@ -27,6 +29,8 @@ const CERTS = [
   '注册会计师', '税务师', '人力资源管理师', '企业人力资源管理师', '法律职业资格', '软考', '系统架构设计师',
   'AWS Certified', 'Azure Certified', 'CKA', 'PMI-ACP', 'CSM', 'Six Sigma Green Belt', '六西格玛绿带', '六西格玛黑带',
 ];
+// Latin names need word boundaries so "CIA" is not found in "financial"; CJK names match as substrings.
+const CERT_MATCHERS = CERTS.map((cert) => [cert, new RegExp(/[A-Za-z]/.test(cert) ? `(?<![A-Za-z0-9])${cert}(?![A-Za-z0-9])` : cert, 'i')]);
 
 const TOP_SCHOOLS = [
   '清华', '北京大学', '北大', '复旦', '上海交通大学', '上海交大', '浙江大学', '中国科学技术大学', '中科大', '南京大学',
@@ -34,7 +38,7 @@ const TOP_SCHOOLS = [
   'Tsinghua', 'Peking University', 'Fudan', 'Zhejiang University', 'MIT', 'Stanford', 'Harvard', 'Cambridge', 'Oxford', 'Berkeley',
 ];
 
-const SCHOOL_LINE = /大学|学院|学校|university|college|school|institute|本科|硕士|博士|bachelor|master|ph\.?d/i;
+const SCHOOL_LINE = /大学|学院|学校|university|college|school|institute|本科|硕士|博士|bachelor|(?<!scrum\s)\bmaster(?:'s|s)?\b|\bph\.?d\b/i;
 
 // Full-width digits/punctuation -> ASCII so the date and number patterns work on Chinese resumes.
 export function normalize(text) {
@@ -55,7 +59,9 @@ export function extractRanges(text, today = new Date()) {
     let m;
     while ((m = DATE_RANGE.exec(line))) {
       const start = Number(m[1]) * 12 + (m[2] ? clamp(Number(m[2]), 1, 12) - 1 : 0);
-      const end = m[5] ? nowM : Number(m[3]) * 12 + (m[4] ? clamp(Number(m[4]), 1, 12) - 1 : 11);
+      // A year with no month ends in December, except the current year, which ends today.
+      const endMonth = m[4] ? clamp(Number(m[4]), 1, 12) - 1 : Number(m[3]) === today.getFullYear() ? today.getMonth() : 11;
+      const end = m[5] ? nowM : Number(m[3]) * 12 + endMonth;
       if (end < start || end > nowM + 1 || nowM - start > 50 * 12) continue;
       out.push({ start, end: Math.min(end, nowM), education: SCHOOL_LINE.test(line), line: line.trim().slice(0, 80) });
     }
@@ -114,7 +120,7 @@ export function parseResume(text, today = new Date()) {
   const avgTenure = jobs ? round(workMonths / 12 / jobs, 1) : null;
   const gapMonths = longestGap(work);
 
-  const certs = CERTS.filter((c) => t.toLowerCase().includes(c.toLowerCase()))
+  const certs = CERT_MATCHERS.filter(([, re]) => re.test(t)).map(([c]) => c)
     .filter((c, i, arr) => !arr.some((o, j) => j !== i && o.length > c.length && o.toLowerCase().includes(c.toLowerCase())));
   const managementMatch = t.match(/(?:带领|管理|负责)\s*(\d{1,3})\s*人(?:的)?(?:团队)?|team of (\d{1,3})|managed (\d{1,3}) (?:people|engineers|staff)/i);
   const management = Boolean(managementMatch) || /团队管理|带团队|团队负责人|team lead|people manager|managed a team|led a team/i.test(t);
