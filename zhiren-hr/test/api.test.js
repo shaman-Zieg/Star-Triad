@@ -73,6 +73,34 @@ test('meta reports AI off and demo data is present', async () => {
   assert.ok(filtered.data.length >= 1 && filtered.data.every((c) => c.stage === 'hired'));
 });
 
+test('all writes validate full documents and rejected patches leave data and activity untouched', async () => {
+  const employee = db.list('employees')[0];
+  const before = structuredClone(employee);
+  const activity = db.recentActivity(1);
+  for (const patch of [{ performance: 99 }, { potential: 4 }, { performance: '4' }, { deptId: 'missing' }, { competencies: { professional: 99 } }, { isAdmin: true }]) {
+    const result = await call('PUT', `/api/employees/${employee.id}`, patch);
+    assert.equal(result.status, 400, JSON.stringify(result));
+    assert.deepEqual(db.get('employees', employee.id), before);
+  }
+  assert.deepEqual(db.recentActivity(1), activity);
+  const count = db.count('employees');
+  assert.equal((await call('POST', '/api/employees', { ...employee, performance: 99 })).status, 400);
+  assert.equal(db.count('employees'), count);
+  for (const col of Object.keys(db.COLLECTIONS).filter(c => c !== 'responses')) {
+    assert.equal((await call('POST', `/api/${col}`, {})).status, 400, col);
+  }
+  const candidate = db.list('candidates').find(c => c.interviews.length);
+  const interviews = structuredClone(candidate.interviews);
+  interviews[0].scores.professional = 99;
+  assert.equal((await call('PUT', `/api/candidates/${candidate.id}`, { interviews })).status, 400);
+  assert.deepEqual(db.get('candidates', candidate.id), candidate);
+  const valid = await call('PUT', `/api/employees/${employee.id}`, { performance: 4 });
+  assert.equal(valid.status, 200);
+  assert.equal(valid.data.performance, 4);
+  await call('PUT', `/api/employees/${employee.id}`, { performance: before.performance });
+  assert.equal((await call('PUT', '/api/employees/does-not-exist', { performance: 99 })).status, 404);
+});
+
 test('documents can be created, updated with attribution, and deleted', async () => {
   const actor = (await call('GET', '/api/employees')).data[0];
   const created = await call('POST', '/api/positions', { title: '测试职位', status: 'open', headcount: 1 }, { 'X-Actor': actor.id });

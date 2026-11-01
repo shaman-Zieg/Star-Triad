@@ -17,7 +17,7 @@ const person = (id, patch = {}) => ({
 });
 const riskPatch = { compaRatio: 0.8, engagement: 1, lastPromotion: '2020-01-01' };
 const incumbent = person('inc', { title: '销售总监', titleEn: 'Sales Director' });
-const plan = (ids, patch = {}) => ({ id: 'p', title: '销售总监', deptId: 'sales', incumbentId: 'inc', criticality: 'high', successors: ids.map((employeeId) => ({ employeeId })), ...patch });
+const plan = (ids, patch = {}) => ({ id: 'p', title: '销售总监', deptId: 'sales', incumbentId: 'inc', criticality: 'high', vacancyRisk: 'low', successors: ids.map((employeeId) => ({ employeeId, readiness: 'now' })), ...patch });
 
 test('high risk remains explicit even when the candidate also fails function checks', () => {
   const spec = roleSpec(plan([]), incumbent, department);
@@ -76,6 +76,8 @@ test('REST endpoints enforce the risk gate without changing an existing plan on 
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
   });
+  db.insert('departments', department);
+  db.insert('employees', incumbent);
   const safe = db.insert('employees', person('safe', { lastPromotion: db.stamp().slice(0, 10) }));
   const risky = db.insert('employees', person('risk', riskPatch));
   const legacy = db.insert('succession', plan([risky.id]));
@@ -92,9 +94,9 @@ test('REST endpoints enforce the risk gate without changing an existing plan on 
   assert.equal(created.status, 201);
   const update = await call('PUT', `/api/succession/${created.data.id}`, { successors: [{ employeeId: safe.id }, { employeeId: risky.id }] });
   assert.equal(update.status, 400);
-  assert.deepEqual(db.get('succession', created.data.id).successors, [{ employeeId: safe.id }]);
+  assert.deepEqual(db.get('succession', created.data.id).successors, [{ employeeId: safe.id, readiness: 'now' }]);
   assert.equal((await call('PUT', `/api/succession/${legacy.id}`, { note: 'review completed' })).status, 200);
-  assert.equal((await call('PUT', `/api/succession/${legacy.id}`, { successors: [{ employeeId: risky.id, note: 'excluded history' }, { employeeId: safe.id }] })).status, 200);
+  assert.equal((await call('PUT', `/api/succession/${legacy.id}`, { successors: [{ employeeId: risky.id, readiness: 'now', note: 'excluded history' }, { employeeId: safe.id, readiness: 'now' }] })).status, 200);
   assert.equal((await call('PUT', `/api/succession/${legacy.id}`, { successors: [] })).status, 200);
   assert.equal((await call('PUT', `/api/succession/${legacy.id}`, { successors: [{ employeeId: risky.id }] })).status, 400, 'once removed, a risky candidate cannot be re-added');
 });

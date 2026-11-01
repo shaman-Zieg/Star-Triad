@@ -8,6 +8,7 @@ import { initAI, aiStatus, aiRateLimited, validateTask, streamTask } from './ai.
 import { seedIfEmpty, reseed } from './seed.js';
 import { successionNominationError } from './succession-validation.js';
 import { buildRetentionPlan } from '../public/js/engine/retention.js';
+import { validationErrors } from '../public/js/engine/validation.js';
 
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TYPES = {
@@ -76,6 +77,11 @@ function actorOf(req) {
 function cleanPatch(body) {
   const { id, createdAt, updatedAt, ...rest } = body;
   return rest;
+}
+
+function validateDocument(col, data) {
+  const errors = validationErrors(col, data, (collection, id) => db.get(collection, id));
+  if (errors.length) throw new HttpError(400, errors.join('; '));
 }
 
 // Survey responses arrive from anyone with the link, so they are validated strictly.
@@ -163,6 +169,7 @@ async function handleApi(req, res, url) {
         if (error) throw new HttpError(400, error);
       }
       if (!anonymous && actor && !data.createdBy) data.createdBy = actor.id;
+      if (!anonymous) validateDocument(col, data);
       const doc = db.insert(col, data);
       db.logActivity({ actor: anonymous ? null : actor, action: 'create', col, doc: anonymous ? { id: doc.id } : doc });
       return sendJson(res, 201, doc);
@@ -177,6 +184,8 @@ async function handleApi(req, res, url) {
   }
   if (anonymous) throw new HttpError(405, 'Survey responses cannot be changed');
   if (method === 'PUT') {
+    const existing = db.get(col, id);
+    if (!existing) throw new HttpError(404, 'Not found');
     if (col === 'idps') {
       const previous = db.get(col, id);
       if (previous && (previous.mode === 'retention' || body.mode === 'retention')) {
@@ -190,7 +199,9 @@ async function handleApi(req, res, url) {
       const error = successionNominationError(body, previous, (employeeId) => db.get('employees', employeeId), db.stamp().slice(0, 10));
       if (error) throw new HttpError(400, error);
     }
-    const result = db.update(col, id, cleanPatch(body));
+    const patch = cleanPatch(body);
+    validateDocument(col, { ...existing, ...patch });
+    const result = db.update(col, id, patch);
     if (!result) throw new HttpError(404, 'Not found');
     db.logActivity({ actor, action: 'update', col, doc: result.after, detail: changeDetail(result.before, result.after) });
     return sendJson(res, 200, result.after);
