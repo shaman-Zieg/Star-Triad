@@ -49,33 +49,37 @@ export const BOXES = {
     actions: [['启动绩效改进计划（PIP），明确目标与期限', 'Start a performance improvement plan with clear goals and dates'], ['评估岗位适配，考虑调岗', 'Assess role fit; consider a move'], ['按合规流程处理，做好沟通与记录', 'Follow a compliant process with clear communication and records']] },
 };
 
-export const boxKey = (perf, pot) => Number(`${potBand(pot)}${perfBand(perf)}`);
-export const boxOf = (emp) => BOXES[boxKey(emp.performance, emp.potential)];
+export const isPerformanceRating = value => Number.isInteger(value) && value >= 1 && value <= 5;
+export const isPotentialRating = value => Number.isInteger(value) && value >= 1 && value <= 3;
+export const hasTalentRatings = emp => isPerformanceRating(emp.performance) && isPotentialRating(emp.potential);
+export const boxKey = (perf, pot) => isPerformanceRating(perf) && isPotentialRating(pot) ? Number(`${potBand(pot)}${perfBand(perf)}`) : null;
+export const boxOf = (emp) => BOXES[boxKey(emp.performance, emp.potential)] || null;
 
 // Representative ratings when someone is dragged into a box.
 export const BOX_DEFAULTS = { perf: [2, 3, 4], pot: [1, 2, 3] };
 export function ratingsForBox(key, current = {}) {
   const pb = key % 10;
   const tb = Math.floor(key / 10);
-  const perf = perfBand(current.performance) === pb ? current.performance : BOX_DEFAULTS.perf[pb];
+  const perf = isPerformanceRating(current.performance) && perfBand(current.performance) === pb ? current.performance : BOX_DEFAULTS.perf[pb];
   return { performance: perf, potential: tb + 1 };
 }
 
 export function distribution(emps) {
+  const assessed = emps.filter(hasTalentRatings);
   const counts = Object.fromEntries(Object.keys(BOXES).map((k) => [k, 0]));
-  for (const e of emps) counts[boxKey(e.performance, e.potential)] += 1;
-  const n = emps.length || 1;
+  for (const e of assessed) counts[boxKey(e.performance, e.potential)] += 1;
+  const n = assessed.length || 1;
   const pct = (k) => counts[k] / n;
   const checks = [];
-  if (emps.length >= 8) {
+  if (assessed.length >= 8) {
     const top = pct(22) + pct(21) + pct(12);
     if (pct(22) > 0.2) checks.push({ level: 'warn', text: ['明星人才占比超过 20%，可能存在评分偏宽，建议校准。', 'Over 20% are Stars; ratings may be lenient. Calibrate.'] });
     if (pct(11) > 0.5) checks.push({ level: 'warn', text: ['超过一半集中在中间格，可能存在居中趋势，区分度不足。', 'Over half sit in the middle box: central tendency, not enough differentiation.'] });
     if (top < 0.1) checks.push({ level: 'info', text: ['高绩效/高潜人才不足 10%，关注人才梯队厚度。', 'Under 10% are high performers or high potentials; check pipeline depth.'] });
-    if (pct(0) === 0 && pct(10) === 0 && emps.length >= 20) checks.push({ level: 'info', text: ['没有低绩效人员，请确认是否回避了困难评价。', 'No low performers at all; check that hard calls were not avoided.'] });
+    if (pct(0) === 0 && pct(10) === 0 && assessed.length >= 20) checks.push({ level: 'info', text: ['没有低绩效人员，请确认是否回避了困难评价。', 'No low performers at all; check that hard calls were not avoided.'] });
     if (!checks.length) checks.push({ level: 'ok', text: ['分布较为合理，未发现明显的评分偏差。', 'Distribution looks reasonable; no obvious rating bias.'] });
   }
-  return { counts, n: emps.length, checks };
+  return { counts, n: assessed.length, unassessed: emps.length - assessed.length, total: emps.length, checks };
 }
 
 // Learning-agility questionnaire for rating potential (after Lombardo & Eichinger).

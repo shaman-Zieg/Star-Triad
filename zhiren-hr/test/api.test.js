@@ -118,6 +118,30 @@ test('documents can be created, updated with attribution, and deleted', async ()
   assert.equal((await call('GET', `/api/positions/${created.data.id}`)).status, 404);
 });
 
+test('employee CSV preview is read-only and confirmation saves only a fully valid fresh batch', async () => {
+  const header = '姓名,职位,部门,入职日期,工号,邮箱,绩效,潜力\n';
+  const csv = header + '导入甲,工程师,d02,2026-10-01,IMPORT-A,import-a@example.test,4,2\n导入乙,工程师,d02,2026-10-01,IMPORT-B,import-b@example.test,,\n';
+  const before = db.count('employees');
+  const log = db.recentActivity(1);
+  const preview = await call('POST', '/api/employees/import-preview', { csv });
+  assert.equal(preview.status, 200);
+  assert.equal(preview.data.valid, true);
+  assert.equal(db.count('employees'), before);
+  assert.deepEqual(db.recentActivity(1), log);
+  const bad = await call('POST', '/api/employees/import', { csv: csv.replace(',4,2', ',99,2') });
+  assert.equal(bad.status, 409);
+  assert.equal(bad.data.rows[0].line, 2);
+  assert.equal(db.count('employees'), before);
+  const saved = await call('POST', '/api/employees/import', { csv });
+  assert.equal(saved.status, 201);
+  assert.equal(saved.data.count, 2);
+  assert.equal(db.count('employees'), before + 2);
+  assert.equal(db.get('employees', saved.data.ids[1]).performance, null, 'missing ratings are not invented');
+  assert.equal((await call('POST', '/api/employees/import', { csv })).status, 409, 'replaying a batch cannot duplicate employees');
+  assert.equal(db.count('employees'), before + 2);
+  for (const id of saved.data.ids) await call('DELETE', `/api/employees/${id}`);
+});
+
 test('retired connector and analysis endpoints are unavailable without altering legacy records', async () => {
   const legacy = db.insert('assessments', { id: 'qlegacy', employeeId: 'e01', status: 'pending_review' });
   for (const method of ['GET', 'POST']) {

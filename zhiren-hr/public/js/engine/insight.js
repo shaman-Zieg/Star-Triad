@@ -2,7 +2,7 @@
 // stored data; observations, hypotheses (to be verified in conversation) and actions
 // are kept separate, and nothing is said about a person that the data does not show.
 import { COMP_KEYS, compByKey, targetProfile, assessCompetencies, ladderInfo, BANDS } from './competency.js';
-import { BOXES, boxKey, flightRisk, PERF_SCALE } from './talent.js';
+import { boxOf, flightRisk, PERF_SCALE, isPerformanceRating, isPotentialRating } from './talent.js';
 import { EXPERIENCES, idpProgress } from './learning.js';
 import { STATUS as SUCC_STATUS, COVERAGE } from './succession.js';
 import { personFamily } from './jd.js';
@@ -34,8 +34,12 @@ export function buildFacts(emp, ctx) {
 
   if (emp.title) add('role', 'role', T(`岗位：${emp.title}`, `Role: ${emp.titleEn || emp.title}`), [emp.title, emp.titleEn || emp.title]);
   add('level', 'level', T(`职级 ${emp.level}，属于${pick(lad.bandName, 'zh')}段（${lad.sharedLevels.join('、')} 共用一套能力标准）`, `Level ${emp.level}, ${pick(lad.bandName, 'en')} band (${lad.sharedLevels.join(', ')} share one standard)`), emp.level);
-  const box = BOXES[boxKey(emp.performance, emp.potential)];
-  add('box', 'talent', T(`九宫格：${box.no} ${pick(box.name, 'zh')}（绩效 ${emp.performance}，潜力 ${emp.potential}）`, `9-box: ${box.no} ${pick(box.name, 'en')} (performance ${emp.performance}, potential ${emp.potential})`), box.no);
+  const box = boxOf(emp);
+  if (box) add('box', 'talent', T(`九宫格：${box.no} ${pick(box.name, 'zh')}（绩效 ${emp.performance}，潜力 ${emp.potential}）`, `9-box: ${box.no} ${pick(box.name, 'en')} (performance ${emp.performance}, potential ${emp.potential})`), box.no);
+  else add('talent_missing', 'talent', T('绩效或潜力尚未评估，不纳入九宫格分类', 'Performance or potential is unassessed; no 9-box classification'), null);
+  if (isPerformanceRating(emp.performance)) add('performance', 'performance', T(`本期绩效 ${emp.performance}（${pick(PERF_SCALE[emp.performance], 'zh')}）`, `Current performance ${emp.performance} (${pick(PERF_SCALE[emp.performance], 'en')})`), emp.performance);
+  else add('performance_missing', 'performance', T('本期绩效尚未评估', 'Current performance is unassessed'), null);
+  if (isPotentialRating(emp.potential)) add('potential', 'potential', T(`潜力评分 ${emp.potential}`, `Potential rating ${emp.potential}`), emp.potential);
   const hist = performanceHistory(emp);
   if (hist.length >= 2) {
     const [prev, last] = hist.slice(-2);
@@ -99,9 +103,12 @@ function individualSummary(emp, facts, assessment, risk) {
     const [prev, last] = hist.slice(-2);
     clauses.push(T(`近两期绩效 ${prev}→${last}${last > prev ? '，呈上升趋势' : last < prev ? '，需关注回落' : '，表现稳定'}`, `Recent ratings ${prev}→${last}${last > prev ? ', improving' : last < prev ? ', a decline to review' : ', stable'}`));
     used.push('perf_trend');
-  } else {
+  } else if (isPerformanceRating(emp.performance)) {
     clauses.push(T(`本期绩效 ${emp.performance}（${pick(PERF_SCALE[emp.performance] || ['待确认', 'unconfirmed'], 'zh')}），暂无连续两期趋势依据`, `Current performance ${emp.performance} (${pick(PERF_SCALE[emp.performance] || ['待确认', 'unconfirmed'], 'en')}); two-cycle trend not available`));
-    used.push('box');
+    used.push('performance');
+  } else {
+    clauses.push(T('本期绩效尚未评估，不能判断绩效高低', 'Current performance is unassessed; no performance judgment can be made'));
+    used.push('performance_missing');
   }
   const strength = assessment.strengths[0];
   const gap = assessment.gaps[0];
@@ -164,14 +171,17 @@ export function personalInsight(emp, ctx) {
   if (risk && risk.level !== 'low') push(obs, T(`流失风险${risk.level === 'high' ? '高' : '中'}（${risk.score} 分），主要来自：${risk.factors.slice(0, 2).map((f) => pick(f.text, 'zh')).join('、')}。`, `${risk.level === 'high' ? 'High' : 'Medium'} flight risk (${risk.score}), mainly: ${risk.factors.slice(0, 2).map((f) => pick(f.text, 'en')).join('; ')}.`), ['risk']);
 
   // Hypotheses: possible explanations to test in conversation, never conclusions.
-  if (emp.performance >= 4 && months >= 36 && (compa < 0.95 || emp.engagement <= 3)) push(hyp, T('高绩效但长期未晋升，且薪酬或敬业度偏低，可能对发展空间或回报有顾虑。需在一对一沟通中确认。', 'Strong performance with no recent promotion, plus lower pay or engagement, may mean concerns about growth or reward. Confirm in a one-to-one.'), ['box', 'promotion', ...(compa < 0.95 ? ['pay'] : []), ...(emp.engagement <= 3 ? ['engagement'] : [])]);
-  if (emp.engagement <= 2 && emp.managerChanged) push(hyp, T('敬业度偏低与近期更换上级可能有关，也可能另有原因。需了解。', 'Low engagement may relate to the recent change of manager, or may not. Ask.'), ['engagement', 'manager_change']);
+  const lowPay = Number.isFinite(compa) && compa > 0 && compa < 0.95;
+  const lowEngagement = isPerformanceRating(emp.engagement) && emp.engagement <= 3;
+  if (isPerformanceRating(emp.performance) && emp.performance >= 4 && months >= 36 && (lowPay || lowEngagement)) push(hyp, T('高绩效但长期未晋升，且薪酬或敬业度偏低，可能对发展空间或回报有顾虑。需在一对一沟通中确认。', 'Strong performance with no recent promotion, plus lower pay or engagement, may mean concerns about growth or reward. Confirm in a one-to-one.'), ['performance', 'promotion', ...(lowPay ? ['pay'] : []), ...(lowEngagement ? ['engagement'] : [])]);
+  if (isPerformanceRating(emp.engagement) && emp.engagement <= 2 && emp.managerChanged) push(hyp, T('敬业度偏低与近期更换上级可能有关，也可能另有原因。需了解。', 'Low engagement may relate to the recent change of manager, or may not. Ask.'), ['engagement', 'manager_change']);
   if (trend < 0 && emp.engagement && emp.engagement <= 3) push(hyp, T('绩效下滑与投入度可能相关，原因尚不清楚。需在复盘中了解。', 'The performance drop may be linked to engagement; the cause is unknown. Explore in the review.'), ['perf_trend', 'engagement']);
   if (emp.potential === 3 && a.status === 'complete' && !a.gaps.length) push(hyp, T('已达到本职级全部要求且潜力高，当前岗位的挑战可能不足。', 'Meets every requirement with high potential; the current role may not stretch them enough.'), ['comp_met', 'box']);
 
   // Actions: specific, owned, and tied to the facts above.
+  if (has('talent_missing')) push(act, T('先由直属上级补齐绩效与潜力评估，再开展九宫格盘点。', 'Have the manager complete performance and potential ratings before the 9-box review.'), ['talent_missing'], { owner: T('直属上级', 'Manager'), kind: 'assess' });
   if (a.status !== 'complete') push(act, T(`两周内由上级完成${a.status === 'partial' ? '剩余' : '全部'}能力评估，再据此制定发展建议。`, `Manager completes the ${a.status === 'partial' ? 'remaining' : 'full'} competency assessment within two weeks before planning development.`), ['comp_missing', 'comp_partial'], { owner: T('直属上级', 'Manager'), kind: 'assess' });
-  if (emp.performance <= 2) push(act, T('制定 60–90 天绩效改进计划：明确 2–3 个可衡量目标、每两周一次反馈，并记录支持措施。', 'Agree a 60-90 day improvement plan: 2-3 measurable goals, feedback every two weeks, and the support provided.'), ['box', 'perf_trend'], { owner: T('直属上级 + HRBP', 'Manager + HRBP'), kind: 'performance' });
+  if (isPerformanceRating(emp.performance) && emp.performance <= 2) push(act, T('制定 60–90 天绩效改进计划：明确 2–3 个可衡量目标、每两周一次反馈，并记录支持措施。', 'Agree a 60-90 day improvement plan: 2-3 measurable goals, feedback every two weeks, and the support provided.'), ['performance', 'perf_trend'], { owner: T('直属上级 + HRBP', 'Manager + HRBP'), kind: 'performance' });
   if (risk?.level === 'high') push(act, T('两周内由直属上级进行一对一保留沟通，了解其职业期望与顾虑，并约定跟进时间。', 'Manager holds a retention one-to-one within two weeks to learn career goals and concerns, and agrees a follow-up date.'), ['risk'], { owner: T('直属上级', 'Manager'), kind: 'retention' });
   if (emp.engagement && emp.engagement <= 2) push(act, T(`敬业度 ${emp.engagement}/5：围绕「${role[0]}」近期任务，确认最影响投入的 1–2 件事${emp.managerChanged ? '，重点核对新上级的目标与支持是否清楚' : ''}（原因需沟通验证），约定一项一个月内可改善的安排并复访。`, `Engagement ${emp.engagement}/5: discuss recent work in ${role[1]} and the one or two things affecting commitment${emp.managerChanged ? ', checking whether the new manager’s goals and support are clear' : ''} (verify the reasons in conversation); agree one change within a month and follow up.`), ['engagement', 'role', 'manager_change'], { owner: T('直属上级', 'Manager'), kind: 'engagement', factor: 'engagement' });
   else if (emp.engagement === 3 && risk && risk.level !== 'low') push(act, T('敬业度一般（3/5）：增加具体、及时的认可，并安排一项可见度更高的任务。', 'Engagement is moderate (3/5): give specific, timely recognition and a more visible piece of work.'), ['engagement'], { owner: T('直属上级', 'Manager'), kind: 'engagement', factor: 'engagement' });

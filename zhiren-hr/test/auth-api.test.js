@@ -120,3 +120,17 @@ test('cross-site writes are blocked and logout invalidates the cookie', async ()
   assert.equal((await call('POST', '/api/auth/logout', {}, signed.cookie)).status, 200);
   assert.equal((await call('GET', '/api/employees', undefined, signed.cookie)).status, 401);
 });
+
+test('employee imports require HR on both preview and save endpoints', async () => {
+  const csv = 'name,title,deptId,hireDate,empNo\nImported,Engineer,d02,2026-10-01,AUTH-IMPORT-1';
+  const before = db.count('employees');
+  for (const endpoint of ['import-preview', 'import']) {
+    assert.equal((await call('POST', `/api/employees/${endpoint}`, { csv })).status, 401);
+    for (const role of ['employee', 'manager']) assert.equal((await call('POST', `/api/employees/${endpoint}`, { csv }, cookies[role])).status, 403);
+  }
+  assert.equal(db.count('employees'), before);
+  assert.equal((await call('POST', '/api/employees/import-preview', { csv }, cookies.hr)).data.valid, true);
+  assert.equal(db.count('employees'), before);
+  assert.equal((await call('POST', '/api/employees/import', { csv }, cookies.hr)).status, 201);
+  assert.equal(db.count('employees'), before + 1);
+});

@@ -6,7 +6,7 @@ import { COMP_KEYS, compByKey, LEVELS, targetProfile, levelRank, assessCompetenc
 import { personFamily, FAMILIES } from './jd.js';
 import { FAMILY_FOCUS } from './interview.js';
 import { skillByKey, skillLabel } from './skills.js';
-import { flightRisk } from './talent.js';
+import { flightRisk, isPerformanceRating, isPotentialRating } from './talent.js';
 import { pick } from './text.js';
 
 // Score components. Competency evidence is used once (fit); readiness is derived
@@ -121,8 +121,10 @@ export function evaluateCandidate(emp, ctx) {
   else if (distance > MAX_LEVEL_DISTANCE) reasons.push([`职级差距过大（${emp.level} → ${spec.level}，差 ${distance} 级）`, `Too far below the role (${emp.level} → ${spec.level}, ${distance} steps)`]);
 
   // 3. Performance floor.
-  checks.performance = { ok: Number(emp.performance) >= 3 };
-  if (!checks.performance.ok) reasons.push([`最近绩效 ${emp.performance} 分，低于 3 分`, `Latest rating ${emp.performance} is below 3`]);
+  const performanceAssessed = isPerformanceRating(emp.performance);
+  const potentialAssessed = isPotentialRating(emp.potential);
+  checks.performance = { ok: performanceAssessed && emp.performance >= 3, assessed: performanceAssessed };
+  if (performanceAssessed && !checks.performance.ok) reasons.push([`最近绩效 ${emp.performance} 分，低于 3 分`, `Latest rating ${emp.performance} is below 3`]);
 
   // 4. Competency evidence against the role profile.
   const assess = assessCompetencies(emp.competencies, spec.profile);
@@ -133,7 +135,7 @@ export function evaluateCandidate(emp, ctx) {
   checks.risk = { ok: !risk || risk.level !== 'high', risk };
 
   const fit = checks.data.ok ? weightedFit(emp.competencies, spec) : null;
-  const components = checks.data.ok ? {
+  const components = checks.data.ok && performanceAssessed && potentialAssessed ? {
     fit: Math.round((fit / 100) * WEIGHTS.fit),
     performance: Math.round(((Math.min(5, Math.max(1, Number(emp.performance) || 1)) - 1) / 4) * WEIGHTS.performance),
     potential: Math.round(((Math.min(3, Math.max(1, Number(emp.potential) || 1)) - 1) / 2) * WEIGHTS.potential),
@@ -147,9 +149,11 @@ export function evaluateCandidate(emp, ctx) {
     status = 'excluded_risk';
     reasons.unshift([`流失风险 ${risk.score} 分（高）：不得进入有效继任名单，不参与排名或覆盖；建议先落实保留措施`, `Flight risk ${risk.score} (high): excluded from the eligible successor list, ranking and coverage; act on retention first`]);
   } else if (reasons.length) status = 'excluded';
-  else if (!checks.data.ok) {
+  else if (!checks.data.ok || !performanceAssessed || !potentialAssessed) {
     status = 'insufficient_data';
-    reasons.push([`缺少能力评估（${assess.missing.length} 项未评估），无法判断是否胜任`, `Missing competency ratings (${assess.missing.length} not assessed); suitability cannot be judged`]);
+    if (!checks.data.ok) reasons.push([`缺少能力评估（${assess.missing.length} 项未评估），无法判断是否胜任`, `Missing competency ratings (${assess.missing.length} not assessed); suitability cannot be judged`]);
+    if (!performanceAssessed) reasons.push(['绩效尚未评估，无法判断是否达到继任要求', 'Performance is unassessed; succession requirements cannot be evaluated']);
+    if (!potentialAssessed) reasons.push(['潜力尚未评估，无法计算继任综合分', 'Potential is unassessed; the succession score cannot be calculated']);
   } else if (fit < SUITABILITY.minFit || score < SUITABILITY.minScore) {
     status = 'below_bar';
     reasons.push([`能力匹配 ${fit}%、综合分 ${score}，未达适任标准（匹配 ≥ ${SUITABILITY.minFit}% 且综合分 ≥ ${SUITABILITY.minScore}）`, `Fit ${fit}% and score ${score} are below the bar (fit ≥ ${SUITABILITY.minFit}% and score ≥ ${SUITABILITY.minScore})`]);

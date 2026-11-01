@@ -5,7 +5,7 @@ import {
   modal, toast, act, field, select, textarea, likert, on, meter, method, chipSelect, list, getActor, hasRole,
 } from '../core.js';
 import { L, tx, loc, lang, RISK_LEVEL } from '../i18n.js';
-import { BOXES, boxKey, ratingsForBox, distribution, PERF_SCALE, POT_SCALE, AGILITY, potentialFromAgility, flightRisk } from '../engine/talent.js';
+import { BOXES, boxKey, ratingsForBox, distribution, PERF_SCALE, POT_SCALE, AGILITY, potentialFromAgility, flightRisk, hasTalentRatings, isPerformanceRating, isPotentialRating } from '../engine/talent.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, assessCompetencies, ladderInfo, VERDICTS, BANDS, LEVELS } from '../engine/competency.js';
 import {
   evaluateAll, evaluatePlan, evaluateCandidate, roleSpec, successionLinks, WEIGHTS, COMPONENT_NAMES, SUITABILITY, STATUS, COVERAGE, CRITICALITY,
@@ -81,6 +81,7 @@ function ratingForm(emp, onSaved) {
       });
     },
     onSubmit: async (v) => {
+      if (!isPerformanceRating(Number(v.performance)) || !isPotentialRating(Number(v.potential))) throw new Error(L('请完成绩效与潜力评分', 'Choose both performance and potential ratings'));
       await api.put(`/api/employees/${emp.id}`, { performance: Number(v.performance), potential: Number(v.potential) });
       toast(L('评级已更新', 'Ratings updated'));
       onSaved();
@@ -111,6 +112,7 @@ async function nineboxView(el, ctx, d) {
   const dept = ctx.query.dept || '';
   const people = d.active.filter((e) => !dept || e.deptId === dept);
   const dist = distribution(people);
+  const unassessed = people.filter(e => !hasTalentRatings(e));
   const rows = [2, 1, 0];
   const colsP = [0, 1, 2];
   let selected = null;
@@ -120,15 +122,16 @@ async function nineboxView(el, ctx, d) {
     const b = BOXES[key];
     const ps = people.filter((e) => boxKey(e.performance, e.potential) === key).sort((a, z) => z.performance - a.performance);
     return html`<div class="box tone-${b.tone}" data-box="${key}" aria-label="${tx(b.name)}">
-      <div class="box-head"><strong>${b.no} · ${tx(b.name)}</strong><span>${ps.length} · ${fmt.pct(ps.length / (people.length || 1))}</span></div>
+      <div class="box-head"><strong>${b.no} · ${tx(b.name)}</strong><span>${ps.length} · ${fmt.pct(ps.length / (dist.n || 1))}</span></div>
       <div class="box-people">${ps.map((e) => html`<span class="pchip" draggable="${hasRole('hr') || e.id !== getActor() ? 'true' : 'false'}" tabindex="0" data-emp="${e.id}" data-tip="${personName(e)} · ${loc(e, 'title')}\n${L('绩效', 'Perf')} ${e.performance} · ${L('潜力', 'Pot')} ${e.potential}">${avatar(e, 'xs')}<span>${personName(e)}</span></span>`)}</div>
     </div>`;
   };
 
   setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px">
-      <div class="row">${deptOptions(d, dept)}<span class="small muted">${L(`${people.length} 人参与盘点 · 拖动头像即可调整格子`, `${people.length} people · drag a person to another box to recalibrate`)}</span></div>
+      <div class="row">${deptOptions(d, dept)}<span class="small muted">${L(`${dist.n} 人已评估 · ${dist.unassessed} 人待评估 · 比例仅按已评估人员计算`, `${dist.n} assessed · ${dist.unassessed} awaiting assessment · percentages use assessed people only`)}</span></div>
     </div>
+    ${unassessed.length ? html`<section class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>${L('待评估员工', 'Awaiting assessment')}</h2><p>${L('绩效或潜力未完成，不纳入九宫格。点击员工查看资料并完成评分。', 'Missing performance or potential ratings; excluded from the grid. Select someone to review and complete their ratings.')}</p></div></div><div class="box-people">${unassessed.map(emp => html`<button class="pchip" type="button" data-emp="${emp.id}">${avatar(emp, 'xs')}<span>${personName(emp)}</span></button>`)}</div></section>` : ''}
     <div class="split">
       <section class="card">
         <div class="ninebox-wrap">
@@ -155,11 +158,11 @@ async function nineboxView(el, ctx, d) {
     const ins = personalInsight(emp, d.insightCtx);
     setHTML(el.querySelector('#detail'), html`
       <div class="row" style="margin-bottom:10px">${avatar(emp, 'md')}<div><a href="#/service/people/${emp.id}"><strong>${personName(emp)}</strong></a><div class="small muted">${loc(emp, 'title')} · ${deptName(emp.deptId)} · ${emp.level}</div></div></div>
-      <div class="row" style="margin-bottom:10px">${badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone)}${badge(`${L('绩效', 'Perf')} ${emp.performance} · ${tx(PERF_SCALE[emp.performance])}`)}${badge(`${L('潜力', 'Pot')} ${emp.potential}`)}${ins.risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[ins.risk.level][0])}`, RISK_LEVEL[ins.risk.level][1]) : ''}</div>
+      <div class="row" style="margin-bottom:10px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('未评估', 'Unassessed'), 'info')}${badge(`${L('绩效', 'Perf')} ${isPerformanceRating(emp.performance) ? `${emp.performance} · ${tx(PERF_SCALE[emp.performance])}` : L('未评估', 'Unassessed')}`)}${badge(`${L('潜力', 'Pot')} ${isPotentialRating(emp.potential) ? emp.potential : L('未评估', 'Unassessed')}`)}${ins.risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[ins.risk.level][0])}`, RISK_LEVEL[ins.risk.level][1]) : ''}</div>
       <div class="personal-summary"><div class="insight-title">${L('综合评语', 'Overall assessment')}</div><p>${tx(ins.summary)}</p></div>
       <div class="section-title">${L('个人解读（规则引擎，基于本人数据）', 'Individual insight (rule engine, from their own data)')}</div>
       ${insightBlock(ins)}
-      <details class="small" style="margin-top:8px"><summary class="muted">${L('该格子的通用做法', 'General practice for this box')}</summary><ul style="margin:6px 0 0;padding-left:18px">${b.actions.map((a) => html`<li>${tx(a)}</li>`)}</ul></details>
+      ${b ? html`<details class="small" style="margin-top:8px"><summary class="muted">${L('该格子的通用做法', 'General practice for this box')}</summary><ul style="margin:6px 0 0;padding-left:18px">${b.actions.map((a) => html`<li>${tx(a)}</li>`)}</ul></details>` : ''}
       <div class="row" style="margin-top:12px">${hasRole('hr') || emp.id !== getActor() ? html`<button class="btn btn-sm" type="button" data-rate>${icon('edit')}${L('调整评级', 'Adjust ratings')}</button>` : ''}<a class="btn btn-sm" href="#/talent/competency?emp=${emp.id}">${L('能力画像', 'Competencies')}</a><a class="btn btn-sm" href="#/learning/idp?emp=${emp.id}">${L('发展计划', 'IDP')}</a></div>`);
   };
   on(el, 'click', '.pchip', (e, c) => showDetail(people.find((x) => x.id === c.dataset.emp)));
@@ -191,7 +194,8 @@ async function nineboxView(el, ctx, d) {
   const succGaps = d.evaluation.plans.filter((ev) => ev.coverage === 'weak');
   const ruleMd = [
     `## ${L('人才分布', 'Talent landscape')}`,
-    ...Object.entries(BOXES).sort((a, b) => b[1].no - a[1].no).map(([k, b]) => `- ${b.no} ${tx(b.name)}：${dist.counts[k]} ${L('人', '')}（${fmt.pct(dist.counts[k] / (people.length || 1))}）`),
+    L(`已评估 ${dist.n} 人，待评估 ${dist.unassessed} 人；分布比例只统计已评估人员。`, `${dist.n} assessed and ${dist.unassessed} unassessed; distribution percentages include assessed people only.`),
+    ...Object.entries(BOXES).sort((a, b) => b[1].no - a[1].no).map(([k, b]) => `- ${b.no} ${tx(b.name)}：${dist.counts[k]} ${L('人', '')}（${fmt.pct(dist.counts[k] / (dist.n || 1))}）`),
     ...dist.checks.map((c) => `- ${tx(c.text)}`),
     '',
     `## ${L('重点投入的关键人才', 'Key talent to invest in')}`,
@@ -205,14 +209,15 @@ async function nineboxView(el, ctx, d) {
       : succGaps.length ? succGaps.map((ev) => `- ${loc(ev.plan, 'title')}`) : [L('- 关键岗位均有合适继任者', '- Every key role has a suitable successor')]),
     '',
     `## ${L('会议决议建议', 'Decisions for the meeting')}`,
-    L('1. 确认关键人才名单并指定发展负责人\n2. 为高风险核心人才制定 30 天内的保留行动\n3. 为存在继任缺口的岗位确定外部招聘或内部培养方案\n4. 需关注人员启动绩效改进计划\n5. 3 个月后复盘行动进展', '1. Confirm the key talent list and name a development owner for each\n2. Agree 30-day retention actions for high-risk key people\n3. Decide external hiring or internal development for roles with a succession gap\n4. Start improvement plans for underperformers\n5. Review progress in 3 months'),
+    L('1. 确认关键人才名单并指定发展负责人\n2. 为高风险核心人才制定 30 天内的保留行动\n3. 为存在继任缺口的岗位确定外部招聘或内部培养方案\n4. 补齐待评估人员的绩效与潜力评分\n5. 3 个月后复盘行动进展', '1. Confirm the key talent list and name a development owner for each\n2. Agree 30-day retention actions for high-risk key people\n3. Decide external hiring or internal development for roles with a succession gap\n4. Complete missing performance and potential ratings\n5. Review progress in 3 months'),
+    ...((dist.counts[0] + dist.counts[10] + dist.counts[20]) ? [L('6. 对已确认低绩效的人员制定支持与改进计划', '6. Agree support and improvement plans for people with confirmed low performance')] : []),
   ].join('\n');
   mountReport(el.querySelector('#ai-talent'), {
     title: L('人才盘点会纪要', 'Talent review summary'),
     ruleMd,
     task: 'talent',
     input: () => ({
-      scope: dept ? deptName(dept) : hasRole('hr') ? 'Whole company' : 'Accessible scope', headcount: people.length,
+      scope: dept ? deptName(dept) : hasRole('hr') ? 'Whole company' : 'Accessible scope', headcount: people.length, assessedHeadcount: dist.n, unassessedHeadcount: dist.unassessed,
       distribution: Object.fromEntries(Object.entries(BOXES).map(([k, b]) => [b.name[1], dist.counts[k]])),
       calibrationFlags: dist.checks.map((c) => c.text[1]),
       keyTalent: keyTalent.map((e) => ({ name: e.nameEn, title: e.titleEn, box: BOXES[boxKey(e.performance, e.potential)].name[1] })),

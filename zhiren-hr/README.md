@@ -48,6 +48,8 @@ For real company data, terminate HTTPS at a trusted reverse proxy and set `ZHIRE
 
 ## Modules
 
+The employee directory supports **Import CSV** for HR (or local mode). Download the template, choose UTF-8 or GBK, review every row, then explicitly confirm the batch. Required columns are `name`, `title`, `deptId`, `hireDate`, plus at least one of `empNo` or `email` per employee to prevent duplicate imports. Chinese headers are supported. Departments accept IDs or unique names; managers must already exist and can be referenced by ID, employee number or email. Imports add up to 500 employees / 1 MB at once; invalid or duplicate rows reject the entire batch. Confirmation rechecks current data inside a transaction. Blank ratings remain unassessed and do not enter the nine-box grid.
+
 | Module | Tools |
 |---|---|
 | **Dashboard (工作台)** | Headline metrics (headcount, open roles, turnover, eNPS, high potentials, training, requests, succession coverage), automatically detected issues, hiring funnel, headcount by department, joiners vs leavers, activity feed |

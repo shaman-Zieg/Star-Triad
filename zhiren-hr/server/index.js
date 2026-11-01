@@ -12,6 +12,7 @@ import { validationErrors } from '../public/js/engine/validation.js';
 import { buildSurveyResults } from './survey-results.js';
 import { createAuth, AccessError } from './auth.js';
 import { readDocuments, authorizeWrite, publicSurvey } from './access.js';
+import { previewEmployees, saveEmployees } from './employee-import.js';
 
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const TYPES = {
@@ -43,13 +44,13 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-function readJson(req, { allowArray = false } = {}) {
+function readJson(req, { allowArray = false, maxBody = MAX_BODY } = {}) {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > maxBody) {
         reject(new HttpError(413, 'Request body too large'));
         req.destroy();
       } else chunks.push(c);
@@ -113,7 +114,8 @@ async function handleApi(req, res, url, auth) {
     auth.checkOrigin(req);
     // A JSON content type forces a CORS preflight, which blocks cross-site writes.
     if (!String(req.headers['content-type'] || '').includes('application/json')) throw new HttpError(415, 'Requests must be sent as JSON.');
-    body = await readJson(req);
+    const importing = parts.length === 2 && parts[0] === 'employees' && ['import-preview', 'import'].includes(parts[1]);
+    body = await readJson(req, { maxBody: importing ? 2_100_000 : MAX_BODY });
   }
   if (parts.length === 2 && parts[0] === 'auth') {
     if (parts[1] === 'session' && method === 'GET') return sendJson(res, 200, auth.info(req));
@@ -135,6 +137,12 @@ async function handleApi(req, res, url, auth) {
   if (auth.required && !user && !publicResponse) throw new HttpError(401, 'Please sign in.');
   const actor = publicResponse ? null : auth.actor(req);
   const requireHR = () => { if (auth.required && user?.role !== 'hr') throw new HttpError(403, 'HR access is required.'); };
+  if (parts.length === 2 && parts[0] === 'employees' && ['import-preview', 'import'].includes(parts[1]) && method === 'POST') {
+    requireHR();
+    if (parts[1] === 'import-preview') return sendJson(res, 200, previewEmployees(body.csv));
+    const result = saveEmployees(body.csv, actor);
+    return sendJson(res, result.ok ? 201 : 409, result.ok ? result : { ...result, error: '导入未保存，请检查逐行错误并重新预览。 / Nothing saved; review row errors and preview again.' });
+  }
   if (parts[0] === 'activity' && method === 'GET') {
     if (user && user.role !== 'hr') return sendJson(res, 200, []);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 30));

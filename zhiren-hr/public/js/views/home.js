@@ -86,9 +86,10 @@ export default async function home(el) {
     tip: m,
     values: [d.employees.filter((e) => e.hireDate.slice(0, 7) === m).length, d.employees.filter((e) => e.leaveDate?.slice(0, 7) === m).length],
   }));
-  const boxes = { star: 0, core: 0, risk: 0 };
+  const boxes = { star: 0, core: 0, risk: 0, unassessed: 0 };
   for (const e of active) {
     const k = boxKey(e.performance, e.potential);
+    if (k === null) { boxes.unassessed++; continue; }
     if (k === 22 || k === 21 || k === 12) boxes.star += 1;
     else if (k === 0 || k === 10 || k === 20) boxes.risk += 1;
     else boxes.core += 1;
@@ -113,7 +114,7 @@ export default async function home(el) {
       ${kpi(L('招聘需求', 'Open roles'), html`${open.length}<small>${L(`个职位 / ${toHire} 人`, `jobs / ${toHire} hires`)}</small>`, L(`管道中 ${inFlight.length} 位候选人${timeToHire ? ` · 平均招聘周期 ${timeToHire} 天` : ''}`, `${inFlight.length} candidates in process${timeToHire ? ` · ${timeToHire} days to hire` : ''}`), '#/recruit/positions', 'briefcase')}
       ${kpi(L('年化离职率', 'Annual turnover'), fmt.pct(turnover, 1), L(`近 12 个月离职 ${leavers.length} 人，主动离职 ${tt.voluntary} 人`, `${leavers.length} leavers in 12 months, ${tt.voluntary} voluntary`), '#/org/structure', 'route')}
       ${kpi(L('员工净推荐值', 'eNPS'), enps ? (enps.score > 0 ? `+${enps.score}` : enps.score) : '—', pulse ? L(`来自「${pulse.title}」· ${enps?.n ?? 0} 份可公开样本`, `From "${pulse.titleEn}" · ${enps?.n ?? 0} eligible replies`) : L('尚无敬业度调研', 'No engagement survey yet'), pulse ? `#/org/diagnosis/${pulse.id}` : '#/org/diagnosis', 'heart')}
-      ${kpi(L('高潜人才占比', 'High potentials'), active.length ? fmt.pct(hipo / active.length, 0) : '—', L(`${hipo} 人 · 核心人才 ${boxes.star} 人 · 需关注 ${boxes.risk} 人`, `${hipo} people · ${boxes.star} key talent · ${boxes.risk} need attention`), '#/talent/ninebox', 'star')}
+      ${kpi(L('高潜人才占比', 'High potentials'), active.length ? fmt.pct(hipo / active.length, 0) : '—', L(`${hipo} 人 · 核心 ${boxes.star} 人 · 需关注 ${boxes.risk} 人 · 待评估 ${boxes.unassessed} 人`, `${hipo} people · ${boxes.star} key · ${boxes.risk} need attention · ${boxes.unassessed} unassessed`), '#/talent/ninebox', 'star')}
       ${kpi(L('培训完成率', 'Training completion'), ls.enrollments ? fmt.pct(ls.completionRate, 0) : '—', L(`人均学时 ${ls.hoursPerHead} 小时 · 满意度 ${ls.satisfaction ?? '—'}`, `${ls.hoursPerHead} hours per head · satisfaction ${ls.satisfaction ?? '—'}`), '#/learning/courses', 'book')}
       ${kpi(L('待处理服务申请', 'Open requests'), openTickets.length, overdue.length ? L(`${overdue.length} 个已超时`, `${overdue.length} past SLA`) : L('均在时效内', 'All within SLA'), '#/service/requests', 'inbox')}
       ${kpi(L('关键岗位继任覆盖', 'Succession coverage'), succ.plans.length ? fmt.pct((succ.plans.length - weak.length) / succ.plans.length, 0) : '—', L(`${succ.plans.length} 个关键岗位 · ${weak.length} 个无合适继任者`, `${succ.plans.length} key roles · ${weak.length} with no suitable successor`), '#/talent/succession', 'shield')}

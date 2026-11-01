@@ -14,6 +14,7 @@ import { radar } from '../charts.js';
 import { md, mdToHtml } from '../md.js';
 import { aiEnabled, streamAI } from '../ai.js';
 import { reloadEmployees } from '../app.js';
+import { openEmployeeImport } from './employee-import.js';
 
 const SUBS = [
   ['people', ['员工档案', 'Directory']],
@@ -98,7 +99,7 @@ async function peopleView(el, ctx) {
       <div class="row"><input class="input" type="search" id="q" value="${ctx.query.q || ''}" placeholder="${L('姓名、职位、工号', 'Name, title, ID')}" style="width:220px">
         <select class="input" id="dept" style="width:auto"><option value="">${L('全部部门', 'All departments')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === dept ? 'selected' : ''}>${loc(x)}</option>`)}</select>
         <div class="seg">${[['active', L('在职', 'Active')], ['left', L('已离职', 'Left')], ['all', L('全部', 'All')]].map(([k, n]) => html`<button type="button" class="${status === k ? 'on' : ''}" data-status="${k}">${n}</button>`)}</div></div>
-      <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增员工', 'Add employee')}</button></div>
+      ${hasRole('hr') ? html`<div class="row"><button class="btn" type="button" data-import-employees>${icon('upload')}${L('批量导入', 'Import CSV')}</button><button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增员工', 'Add employee')}</button></div>` : ''}</div>
     <section class="card card-flush"><div class="table-wrap"><table class="table">
       <thead><tr><th>${L('员工', 'Employee')}</th><th>${L('部门', 'Department')}</th><th>${L('职级', 'Level')}</th><th>${L('地点', 'Location')}</th><th>${L('司龄', 'Tenure')}</th><th>${L('直属上级', 'Manager')}</th></tr></thead>
       <tbody>${rows.map((e) => html`<tr class="clickable" data-href="#/service/people/${e.id}"><td>${personLink(e)}</td><td>${loc(d.departments.find((x) => x.id === e.deptId))}</td><td>${e.level}</td>
@@ -110,6 +111,7 @@ async function peopleView(el, ctx) {
     location.hash = `#/service/people${qs.toString() ? `?${qs}` : ''}`;
   };
   el.querySelector('#dept').addEventListener('change', (e) => go({ dept: e.target.value }));
+  el.querySelector('[data-import-employees]')?.addEventListener('click', () => openEmployeeImport(async () => { await reloadEmployees(); ctx.rerender(); }));
   let t;
   el.querySelector('#q').addEventListener('input', (e) => {
     clearTimeout(t);
@@ -151,7 +153,7 @@ async function profile(el, ctx, d) {
         ${(e.skills || []).length ? html`<div class="section-title">${L('技能标签', 'Skills')}</div><div>${e.skills.map((s) => html`<span class="tag">${s}</span>`)}</div>` : ''}
         ${reports.length ? html`<div class="section-title">${L('团队成员', 'Team')}</div>${reports.map((r) => html`<div style="margin:6px 0">${personLink(r)}</div>`)}` : ''}</section>
       <section class="card"><div class="card-head"><h2>${L('人才画像', 'Talent profile')}</h2><a class="btn btn-sm" href="#/talent/competency?emp=${e.id}">${L('详情', 'Details')}</a></div>
-        <div class="row" style="margin-bottom:8px">${badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone)}${badge(`${L('绩效', 'Perf')} ${e.performance} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
+        <div class="row" style="margin-bottom:8px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('待评估', 'Not assessed'))}${badge(`${L('绩效', 'Perf')} ${e.performance ?? '—'} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential ?? '—'}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
         ${radar({ axes: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), series: [{ name: L('当前', 'Current'), values: e.competencies || {}, cls: 's1' }, { name: L('目标', 'Target'), values: targetProfile(e.level), cls: 's2' }], size: 280 })}</section>
       <div class="stack">
         <section class="card"><div class="card-head"><h2>${L('学习发展', 'Learning')}</h2>${idp ? html`<a class="btn btn-sm" href="#/learning/idp/${idp.id}">IDP ${idpProgress(idp)}%</a>` : html`<a class="btn btn-sm" href="#/learning/idp?emp=${e.id}">${L('创建 IDP', 'Create IDP')}</a>`}</div>
