@@ -437,7 +437,7 @@ async function candidateDetail(el, ctx, d) {
 }
 
 function scorecardForm(c, pos, plan, d, onSaved) {
-  const pending = (c.interviews || []).find((i) => !Object.keys(i.scores || {}).length && i.interviewerId === getActor())
+  const pending = (c.interviews || []).find((i) => (!Object.keys(i.scores || {}).length || !i.recommendation) && i.interviewerId === getActor())
     || (!hasRole('hr') ? (c.interviews || []).find(i => i.interviewerId === getActor()) : null);
   if (!hasRole('hr') && !pending) return;
   const interviewers = d.employees.filter((e) => e.status !== 'left' && (hasRole('hr') || e.id === getActor()));

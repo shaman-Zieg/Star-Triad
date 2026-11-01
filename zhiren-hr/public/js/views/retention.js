@@ -4,10 +4,12 @@ import { flightRisk } from '../engine/talent.js';
 import { retentionEligible, buildRetentionPlan, retentionProgress } from '../engine/retention.js';
 
 export function retentionView(el, ctx, d, evaluation = false) {
-  const plans = d.idps.filter(p => p.mode === 'retention');
-  const existing = new Set(plans.filter(p => p.status === 'active').map(p => p.employeeId));
+  const allPlans = d.idps.filter(p => p.mode === 'retention');
+  const plans = allPlans.filter(p => !ctx.query.plan || p.id === ctx.query.plan);
+  const existing = new Set(allPlans.filter(p => p.status === 'active').map(p => p.employeeId));
   const eligible = d.active.filter(e => retentionEligible(e, today()) && !existing.has(e.id));
   setHTML(el, html`
+    ${ctx.query.plan ? html`<a class="btn btn-sm" href="#/learning/${evaluation ? 'eval' : 'idp'}?kind=retention">${L('查看全部留任计划', 'All retention plans')}</a>` : ''}
     ${callout('info', L('留任干预仅为高流失风险核心人员创建（风险分 ≥55，且绩效 ≥4 或潜力为3）。计划保存创建时的风险基线；30/60/90天回访记录用于核对落实情况，风险变化不等于干预的因果效果。', 'Create retention plans only for high-risk key talent (risk ≥55 and performance ≥4 or potential 3). Preserve the initial baseline and review delivery at days 30/60/90. Risk changes do not establish causality.'))}
     ${!evaluation ? html`<div class="row-between" style="margin:16px 0"><h2>${L('留任干预 IDP', 'Retention intervention IDPs')}</h2><select class="input" id="retention-new" style="width:auto" aria-label="${L('创建留任干预', 'Create retention plan')}"><option value="">${L('为高风险核心人员创建…', 'Create for high-risk key talent…')}</option>${eligible.map(e => html`<option value="${e.id}">${personName(e)} · ${flightRisk(e, today()).score}</option>`)}</select></div>` : ''}
     <div class="stack" style="margin-top:16px">${plans.length ? plans.map(p => {

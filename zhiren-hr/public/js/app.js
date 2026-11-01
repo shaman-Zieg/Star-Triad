@@ -5,6 +5,7 @@ import { setMeta, aiEnabled, aiHint } from './ai.js';
 
 const MODULES = [
   { key: 'home', icon: 'home', name: ['工作台', 'Dashboard'], load: () => import('./views/home.js') },
+  { key: 'todos', icon: 'check', name: ['我的待办', 'My tasks'], load: () => import('./views/todos.js') },
   { group: ['招聘与人才', 'Hiring & talent'] },
   { key: 'recruit', icon: 'briefcase', name: ['智能招聘', 'Recruitment'], load: () => import('./views/recruit.js'), count: 'applied' },
   { key: 'talent', icon: 'grid', name: ['人才盘点', 'Talent review'], load: () => import('./views/talent.js') },
