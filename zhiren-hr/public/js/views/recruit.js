@@ -58,9 +58,9 @@ const analyze = (c, pos) => {
 function skillPicker(name, selected = []) {
   const set = new Set(selected);
   const groups = Object.keys(SKILL_FAMILIES).map((fam) => [fam, SKILLS.filter((s) => s.family === fam)]);
-  return html`<div class="chips-input" data-chips="${name}" style="flex-direction:column;gap:4px"><input type="hidden" name="${name}" value="${[...set].join(',')}">
-    ${groups.map(([fam, skills]) => html`<details ${skills.some((s) => set.has(s.key)) ? 'open' : ''}><summary class="small muted" style="cursor:pointer">${tx(SKILL_FAMILIES[fam])}${skills.filter((s) => set.has(s.key)).length ? ` · ${skills.filter((s) => set.has(s.key)).length}` : ''}</summary>
-      <div class="chips-input" style="padding:6px 0">${skills.map((s) => html`<button type="button" class="chip-toggle ${set.has(s.key) ? 'on' : ''}" data-v="${s.key}" aria-pressed="${set.has(s.key) ? 'true' : 'false'}">${tx(s.label)}</button>`)}</div></details>`)}
+  return html`<div class="flex-col gap-1 chips-input" data-chips="${name}"><input type="hidden" name="${name}" value="${[...set].join(',')}">
+    ${groups.map(([fam, skills]) => html`<details ${skills.some((s) => set.has(s.key)) ? 'open' : ''}><summary class="pointer small muted">${tx(SKILL_FAMILIES[fam])}${skills.filter((s) => set.has(s.key)).length ? ` · ${skills.filter((s) => set.has(s.key)).length}` : ''}</summary>
+      <div class="py-2 chips-input">${skills.map((s) => html`<button type="button" class="chip-toggle ${set.has(s.key) ? 'on' : ''}" data-v="${s.key}" aria-pressed="${set.has(s.key) ? 'true' : 'false'}">${tx(s.label)}</button>`)}</div></details>`)}
   </div>`;
 }
 
@@ -114,7 +114,7 @@ async function positionsView(el, ctx, d) {
   const rows = d.positions.filter((p) => filter === 'all' || p.status === filter);
   const count = (p, stages) => d.candidates.filter((c) => c.positionId === p.id && stages.includes(c.stage)).length;
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="seg" role="group">${[['open', L('招聘中', 'Open')], ['paused', L('暂停', 'Paused')], ['closed', L('已关闭', 'Closed')], ['all', L('全部', 'All')]].map(([k, n]) => html`<button type="button" class="${filter === k ? 'on' : ''}" data-filter="${k}">${n}</button>`)}</div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建职位', 'New job')}</button>
     </div>
@@ -124,7 +124,7 @@ async function positionsView(el, ctx, d) {
         <tbody>${rows.map((p) => {
           const hired = count(p, ['hired']);
           const gap = hiringGap(p, d.candidates, today());
-          return html`<tr class="clickable" data-href="#/recruit/positions/${p.id}">
+          return html`<tr class="clickable" tabindex="0" data-href="#/recruit/positions/${p.id}">
             <td><a href="#/recruit/positions/${p.id}"><strong>${loc(p, 'title')}</strong></a><div class="small muted">${p.level} · ${tx(LOCATIONS[p.location] || [p.location, p.location])}${p.salaryMin ? ` · ${p.salaryMin}-${p.salaryMax}k` : ''}</div></td>
             <td>${deptName(d, p.deptId)}</td>
             <td>${badge(tx(PRIORITY[p.priority][0]), PRIORITY[p.priority][1])}</td>
@@ -150,8 +150,8 @@ async function positionDetail(el, ctx, d) {
   const mgr = d.employees.find((e) => e.id === p.hiringManagerId);
   const jdText = p.jd || generateJD({ ...p, title: loc(p, 'title'), dept: deptName(d, p.deptId), location: tx(LOCATIONS[p.location] || ['', '']) }, lang());
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
-      <div><a href="#/recruit/positions" class="small">← ${L('全部职位', 'All jobs')}</a><h2 style="font-size:19px;margin-top:4px">${loc(p, 'title')} ${statusBadge(p.status)}</h2>
+    <div class="mb-3 row-between">
+      <div><a href="#/recruit/positions" class="small">← ${L('全部职位', 'All jobs')}</a><h2 class="title-sm mt-1">${loc(p, 'title')} ${statusBadge(p.status)}</h2>
         <div class="muted small">${deptName(d, p.deptId)} · ${p.level} · ${tx(LOCATIONS[p.location] || ['', ''])} · ${L(`招聘 ${p.headcount} 人`, `${p.headcount} hire(s)`)}${p.salaryMin ? ` · ${p.salaryMin}-${p.salaryMax}k/${L('月', 'mo')}` : ''}</div></div>
       <div class="row"><a class="btn" href="#/recruit/interview?pos=${p.id}">${icon('message')}${L('面试工具包', 'Interview kit')}</a><a class="btn" href="#/recruit/jd?pos=${p.id}">${icon('file')}${L('编辑 JD', 'Edit JD')}</a><button class="btn" type="button" data-edit>${icon('edit')}${L('编辑', 'Edit')}</button><button class="btn btn-primary" type="button" data-add>${icon('plus')}${L('添加候选人', 'Add candidate')}</button></div>
     </div>
@@ -160,7 +160,7 @@ async function positionDetail(el, ctx, d) {
         <section class="card card-flush">
           <div class="card-head"><div><h2>${L('候选人排名', 'Ranked candidates')}</h2><p>${L('按简历匹配度排序；点击查看完整评估', 'Sorted by resume fit; click for the full assessment')}</p></div></div>
           ${cands.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('候选人', 'Candidate')}</th><th class="num">${L('匹配度', 'Fit')}</th><th>${L('匹配技能', 'Matched skills')}</th><th>${L('阶段', 'Stage')}</th><th>${L('来源', 'Source')}</th></tr></thead>
-            <tbody>${cands.map(({ c, match, parsed }) => html`<tr class="clickable" data-href="#/recruit/pipeline/${c.id}"><td><a href="#/recruit/pipeline/${c.id}"><strong>${personName(c)}</strong></a><div class="small muted">${L(`${parsed.years} 年经验`, `${parsed.years} yrs`)} · ${tx(EDUCATION[parsed.education].name)}</div></td>
+            <tbody>${cands.map(({ c, match, parsed }) => html`<tr class="clickable" tabindex="0" data-href="#/recruit/pipeline/${c.id}"><td><a href="#/recruit/pipeline/${c.id}"><strong>${personName(c)}</strong></a><div class="small muted">${L(`${parsed.years} 年经验`, `${parsed.years} yrs`)} · ${tx(EDUCATION[parsed.education].name)}</div></td>
               <td class="num"><span class="score ${tierTone(match.score)}">${match.score}</span></td>
               <td>${match.matched.slice(0, 4).map((k) => html`<span class="tag tag-ok">${skillLabel(k, lang())}</span>`)}${match.missing.slice(0, 2).map((k) => html`<span class="tag tag-miss">${skillLabel(k, lang())}</span>`)}</td>
               <td>${stageBadge(c.stage)}</td><td class="small">${tx(SOURCES[c.source] || [c.source, c.source])}</td></tr>`)}</tbody></table></div>` : empty(L('还没有候选人', 'No candidates yet'), L('添加候选人或使用简历筛选工具批量导入。', 'Add candidates or bulk-import with resume screening.'), 'user')}
@@ -170,11 +170,11 @@ async function positionDetail(el, ctx, d) {
       </div>
       <div class="stack">
         <section class="card"><div class="card-head"><h2>${L('招聘漏斗', 'Funnel')}</h2></div>${hbars(funnel, { head: [L('阶段', 'Stage'), L('人数', 'People')] })}
-          <dl class="kv" style="margin-top:12px"><dt>${L('进行中', 'In process')}</dt><dd>${active.length}</dd><dt>${L('已开放', 'Open for')}</dt><dd>${L(`${daysBetween(p.openedAt || p.createdAt, today())} 天`, `${daysBetween(p.openedAt || p.createdAt, today())} days`)}</dd><dt>${L('用人经理', 'Hiring manager')}</dt><dd>${personName(mgr)}</dd></dl></section>
+          <dl class="mt-3 kv"><dt>${L('进行中', 'In process')}</dt><dd>${active.length}</dd><dt>${L('已开放', 'Open for')}</dt><dd>${L(`${daysBetween(p.openedAt || p.createdAt, today())} 天`, `${daysBetween(p.openedAt || p.createdAt, today())} days`)}</dd><dt>${L('用人经理', 'Hiring manager')}</dt><dd>${personName(mgr)}</dd></dl></section>
         <section class="card"><div class="card-head"><h2>${L('岗位要求', 'Requirements')}</h2></div>
           <div class="section-title">${L('必备技能', 'Required')}</div><div>${(p.skills || []).map((k) => html`<span class="tag">${skillLabel(k, lang())}</span>`)}</div>
           <div class="section-title">${L('加分技能', 'Nice to have')}</div><div>${(p.niceSkills || []).map((k) => html`<span class="tag">${skillLabel(k, lang())}</span>`)}</div>
-          <dl class="kv" style="margin-top:12px"><dt>${L('经验', 'Experience')}</dt><dd>${L(`${p.minYears} 年以上`, `${p.minYears}+ years`)}</dd><dt>${L('学历', 'Education')}</dt><dd>${tx(EDUCATION[p.education || 0].name)}</dd></dl>
+          <dl class="mt-3 kv"><dt>${L('经验', 'Experience')}</dt><dd>${L(`${p.minYears} 年以上`, `${p.minYears}+ years`)}</dd><dt>${L('学历', 'Education')}</dt><dd>${tx(EDUCATION[p.education || 0].name)}</dd></dl>
         </section>
       </div>
     </div>`);
@@ -228,10 +228,10 @@ async function pipelineView(el, ctx, d) {
     </article>`;
   };
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="row">
-        <select class="input" id="pos-filter" style="width:auto" aria-label="${L('按职位筛选', 'Filter by job')}"><option value="">${L('全部职位', 'All jobs')}</option>${d.positions.filter((p) => p.status !== 'closed').map((p) => html`<option value="${p.id}" ${p.id === posFilter ? 'selected' : ''}>${loc(p, 'title')}</option>`)}</select>
-        <input class="input" type="search" id="cand-q" placeholder="${L('搜索候选人', 'Search candidates')}" value="${ctx.query.q || ''}" style="width:200px">
+        <select class="w-auto input" id="pos-filter" aria-label="${L('按职位筛选', 'Filter by job')}"><option value="">${L('全部职位', 'All jobs')}</option>${d.positions.filter((p) => p.status !== 'closed').map((p) => html`<option value="${p.id}" ${p.id === posFilter ? 'selected' : ''}>${loc(p, 'title')}</option>`)}</select>
+        <input class="w-200 input" type="search" id="cand-q" aria-label="${L('搜索候选人', 'Search candidates')}" placeholder="${L('搜索候选人', 'Search candidates')}" value="${ctx.query.q || ''}">
       </div>
       <div class="row"><span class="small muted">${L('拖拽卡片即可推进阶段', 'Drag cards to move stages')}</span><button class="btn btn-primary" type="button" data-add>${icon('plus')}${L('添加候选人', 'Add candidate')}</button></div>
     </div>
@@ -287,7 +287,7 @@ async function moveStage(c, stage, d) {
       modal({
         title: L('标记为未通过', 'Mark as not selected'),
         body: html`${field(L('原因', 'Reason'), select('reason', Object.entries(REJECT_REASONS).map(([k, v]) => [k, tx(v)])))}
-          <p class="small muted" style="margin-top:10px">${L('建议在 3 个工作日内礼貌告知候选人，并将其保留在人才库中。', 'Let the candidate know politely within 3 working days, and keep them in the talent pool.')}</p>`,
+          <p class="mt-3 small muted">${L('建议在 3 个工作日内礼貌告知候选人，并将其保留在人才库中。', 'Let the candidate know politely within 3 working days, and keep them in the talent pool.')}</p>`,
         submitLabel: L('确认', 'Confirm'),
         onSubmit: (v) => { patch.rejectReason = v.reason; resolve(true); },
         onClose: () => resolve(false),
@@ -354,31 +354,31 @@ async function candidateDetail(el, ctx, d) {
   const partName = { required: L('必备技能', 'Required skills'), nice: L('加分技能', 'Nice-to-have'), experience: L('工作经验', 'Experience'), education: L('学历', 'Education'), bonus: L('附加项', 'Bonus evidence') };
 
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="row">${avatar(c, 'md')}<div><a href="#/recruit/pipeline${pos.id ? `?pos=${pos.id}` : ''}" class="small">← ${L('候选人看板', 'Pipeline')}</a>
-        <h2 style="font-size:19px">${personName(c)} ${stageBadge(c.stage)}</h2>
+        <h2 class="title-sm">${personName(c)} ${stageBadge(c.stage)}</h2>
         <div class="small muted">${L('应聘', 'Applying for')} <a href="#/recruit/positions/${pos.id}">${loc(pos, 'title')}</a> · ${tx(SOURCES[c.source] || [c.source, c.source])} · ${L('投递于', 'Applied')} ${fmt.date(c.appliedAt)}${c.email ? ` · ${c.email}` : ''}${c.phone ? ` · ${c.phone}` : ''}</div></div></div>
-      <div class="row"><label class="small muted" for="move">${L('移动到', 'Move to')}</label><select class="input" id="move" style="width:auto"><option value="">—</option>${nextStages.map((s) => html`<option value="${s}">${tx(STAGES[s])}</option>`)}</select>
+      <div class="row"><label class="small muted" for="move">${L('移动到', 'Move to')}</label><select class="w-auto input" id="move"><option value="">—</option>${nextStages.map((s) => html`<option value="${s}">${tx(STAGES[s])}</option>`)}</select>
         <button class="btn btn-primary" type="button" data-score>${icon('star')}${L('填写面试评分', 'Add scorecard')}</button></div>
     </div>
     ${c.stage === 'rejected' && c.rejectReason ? callout('info', L(`未通过原因：${tx(REJECT_REASONS[c.rejectReason] || [c.rejectReason])}`, `Reason: ${tx(REJECT_REASONS[c.rejectReason] || [c.rejectReason, c.rejectReason])}`)) : ''}
     ${c.offer ? callout('brand', L(`Offer：月薪 ${fmt.money(c.offer.salary)}，入职日期 ${fmt.date(c.offer.startDate)}`, `Offer: ${fmt.money(c.offer.salary)} per month, starting ${fmt.date(c.offer.startDate)}`)) : ''}
-    <div class="split" style="margin-top:12px">
+    <div class="mt-3 split">
       <div class="stack">
         <section class="card">
           <div class="card-head"><div><h2>${L('简历匹配分析', 'Resume fit analysis')}</h2><p>${L('每一分都可追溯到简历证据；年龄、性别、院校背景不计分', 'Every point traces to resume evidence; age, gender and school prestige never score')}</p></div>${badge(tx(TIERS[match.tier].name), TIERS[match.tier].tone)}</div>
-          <div class="row" style="gap:20px;align-items:flex-start">
+          <div class="gap-5 items-start row">
             ${scoreRing(match.score, TIERS[match.tier].tone === 'danger' ? 'danger' : TIERS[match.tier].tone === 'warn' ? 'warn' : TIERS[match.tier].tone === 'ok' ? 'ok' : 'brand')}
-            <div style="flex:1;min-width:220px">${Object.entries(match.parts).map(([k, v]) => html`<div class="hbar-row"><span class="hbar-label">${partName[k]}</span><span class="hbar-track"><span style="flex:1">${meter(v, WEIGHTS[k], v / WEIGHTS[k] >= 0.8 ? 'ok' : v / WEIGHTS[k] >= 0.5 ? 'info' : 'warn')}</span><span class="hbar-value">${Math.round(v)}/${WEIGHTS[k]}</span></span></div>`)}</div>
+            <div class="grow min-w-220">${Object.entries(match.parts).map(([k, v]) => html`<div class="hbar-row"><span class="hbar-label">${partName[k]}</span><span class="hbar-track"><span class="grow">${meter(v, WEIGHTS[k], v / WEIGHTS[k] >= 0.8 ? 'ok' : v / WEIGHTS[k] >= 0.5 ? 'info' : 'warn')}</span><span class="hbar-value">${Math.round(v)}/${WEIGHTS[k]}</span></span></div>`)}</div>
           </div>
           <div class="section-title">${L('技能匹配', 'Skills')}</div>
           <div>${match.matched.map((k) => html`<span class="tag tag-ok">✓ ${skillLabel(k, lang())}</span>`)}${match.missing.map((k) => html`<span class="tag tag-miss">${skillLabel(k, lang())}</span>`)}${match.niceMatched.map((k) => html`<span class="tag">+ ${skillLabel(k, lang())}</span>`)}</div>
-          <div class="grid cols-2" style="margin-top:12px">
-            <div><div class="section-title">${L('亮点', 'Highlights')}</div>${match.highlights.length ? html`<ul style="margin:0;padding-left:18px">${match.highlights.map((h) => html`<li>${h}</li>`)}</ul>` : html`<p class="muted">—</p>`}</div>
-            <div><div class="section-title">${L('风险与待核实', 'Risks to verify')}</div>${match.risks.length ? html`<ul style="margin:0;padding-left:18px">${match.risks.map((r) => html`<li>${badge(r.level === 'high' ? L('高', 'High') : r.level === 'medium' ? L('中', 'Med') : L('低', 'Low'), r.level === 'high' ? 'danger' : r.level === 'medium' ? 'warn' : '')} ${r.text}</li>`)}</ul>` : html`<p class="muted">—</p>`}</div>
+          <div class="mt-3 grid cols-2">
+            <div><div class="section-title">${L('亮点', 'Highlights')}</div>${match.highlights.length ? html`<ul class="list-plain">${match.highlights.map((h) => html`<li>${h}</li>`)}</ul>` : html`<p class="muted">—</p>`}</div>
+            <div><div class="section-title">${L('风险与待核实', 'Risks to verify')}</div>${match.risks.length ? html`<ul class="list-plain">${match.risks.map((r) => html`<li>${badge(r.level === 'high' ? L('高', 'High') : r.level === 'medium' ? L('中', 'Med') : L('低', 'Low'), r.level === 'high' ? 'danger' : r.level === 'medium' ? 'warn' : '')} ${r.text}</li>`)}</ul>` : html`<p class="muted">—</p>`}</div>
           </div>
           <div class="section-title">${L('建议追问', 'Suggested interview probes')}</div>
-          <ol style="margin:0;padding-left:20px">${match.probes.map((p) => html`<li>${p}</li>`)}</ol>
+          <ol class="list-plain">${match.probes.map((p) => html`<li>${p}</li>`)}</ol>
         </section>
         <div id="ai-resume"></div>
         <section class="card">
@@ -388,7 +388,7 @@ async function candidateDetail(el, ctx, d) {
             <div class="table-wrap"><table class="table table-compact"><thead><tr><th>${L('能力', 'Competency')}</th>${c.interviews.map((i) => html`<th class="num">${tx(ROUNDS.find((r) => r.key === i.round)?.name || [i.round, i.round])}<div class="small muted">${personName(emp[i.interviewerId])}</div></th>`)}<th class="num">${L('均分', 'Mean')}</th></tr></thead>
               <tbody>${Object.entries(agg.comps).map(([k, s]) => html`<tr><td>${tx(compByKey[k].name)}${agg.disagreements.includes(k) ? html` <span class="badge badge-warn">${L('分歧大', 'Split')}</span>` : ''}</td>${c.interviews.map((i) => html`<td class="num">${i.scores?.[k] ?? '—'}</td>`)}<td class="num"><strong>${s.mean}</strong></td></tr>`)}
                 <tr><td>${L('录用建议', 'Recommendation')}</td>${c.interviews.map((i) => html`<td class="num">${i.recommendation ? badge(tx(RECOMMENDATIONS[i.recommendation].name), RECOMMENDATIONS[i.recommendation].tone) : html`<span class="badge badge-warn">${L('待提交', 'Pending')}</span>`}</td>`)}<td class="num"><strong>${agg.overall ?? '—'}</strong></td></tr></tbody></table></div>
-            ${c.interviews.filter((i) => i.notes).map((i) => html`<p class="small" style="margin-top:8px"><strong>${personName(emp[i.interviewerId])}：</strong>${i.notes}</p>`)}`
+            ${c.interviews.filter((i) => i.notes).map((i) => html`<p class="mt-2 small"><strong>${personName(emp[i.interviewerId])}：</strong>${i.notes}</p>`)}`
             : empty(L('还没有面试评分', 'No scorecards yet'), L('建议按面试计划安排 2-3 轮结构化面试。', 'Plan 2-3 structured interview rounds.'), 'star')}
         </section>
       </div>
@@ -401,7 +401,7 @@ async function candidateDetail(el, ctx, d) {
           <div class="section-title">${L('简历原文', 'Resume')}</div><div class="resume-box">${c.resume || L('（无简历文本）', '(no resume text)')}</div></section>
         <section class="card"><div class="card-head"><h2>${L('协作备注', 'Team notes')}</h2></div>
           <div class="timeline">${(c.notes || []).map((n) => html`<div class="timeline-item">${avatar(emp[n.by] || { name: '?' }, 'xs')}<div><strong>${personName(emp[n.by])}</strong> <time>${fmt.stamp(n.at)}</time><div>${n.text}</div></div></div>`)}</div>
-          <form id="note-form" class="row" style="margin-top:8px"><input class="input" name="text" placeholder="${L('写下你的观察，团队成员都能看到', 'Share an observation with the hiring team')}" style="flex:1" maxlength="500"><button class="btn" type="submit">${icon('send')}</button></form></section>
+          <form id="note-form" class="mt-2 row"><input class="grow input" name="text" aria-label="${L('添加备注', 'Add a note')}" placeholder="${L('写下你的观察，团队成员都能看到', 'Share an observation with the hiring team')}" maxlength="500"><button class="btn" type="submit" aria-label="${L('发送备注', 'Send note')}">${icon('send')}</button></form></section>
         <section class="card"><div class="card-head"><h2>${L('面试计划', 'Interview plan')}</h2><a class="btn btn-sm" href="#/recruit/interview?pos=${pos.id}">${L('完整题库', 'Full guide')}</a></div>
           ${ROUNDS.map((r) => html`<div class="list-item"><div class="grow"><div class="title">${tx(r.name)}</div><div class="meta">${plan.byRound[r.key].map((k) => tx(compByKey[k].name)).join(' · ') || '—'}</div></div>${(c.interviews || []).some((i) => i.round === r.key && Object.keys(i.scores || {}).length) ? badge(L('已完成', 'Done'), 'ok') : ''}</div>`)}</section>
       </div>
@@ -450,13 +450,13 @@ function scorecardForm(c, pos, plan, d, onSaved) {
     wide: true,
     body: html`
       ${callout('brand', L('请依据候选人讲述的具体行为证据（STAR）评分，而不是整体印象。1 = 明显不足，3 = 符合岗位要求，5 = 远超要求。', 'Score on concrete behavioral evidence (STAR), not overall impressions. 1 = clearly below, 3 = meets the role, 5 = far exceeds.'))}
-      <div class="form-grid cols-3" style="margin-top:12px">
+      <div class="mt-3 form-grid cols-3">
         ${field(L('面试轮次', 'Round'), select('round', ROUNDS.filter(r => hasRole('hr') || r.key === pending.round).map((r) => [r.key, tx(r.name)]), { value: pending?.round || 'r1' }))}
         ${field(L('面试官', 'Interviewer'), select('interviewerId', interviewers.map((e) => [e.id, personName(e)]), { value: getActor() }))}
         ${field(L('面试日期', 'Date'), input('date', { type: 'date', value: today() }))}
       </div>
       ${comps.map((k) => html`<div class="q-block"><p>${tx(compByKey[k].name)} <span class="small muted">— ${tx(compByKey[k].def)}</span></p>${likert(`s_${k}`)}
-        <div class="small muted" style="margin-top:6px">1：${tx(compByKey[k].anchors[1])}　3：${tx(compByKey[k].anchors[3])}　5：${tx(compByKey[k].anchors[5])}</div></div>`)}
+        <div class="mt-2 small muted">1：${tx(compByKey[k].anchors[1])}　3：${tx(compByKey[k].anchors[3])}　5：${tx(compByKey[k].anchors[5])}</div></div>`)}
       <div class="q-block"><p>${L('录用建议', 'Recommendation')}</p><div class="row">${Object.entries(RECOMMENDATIONS).map(([k, r]) => html`<label class="check"><input type="radio" name="recommendation" value="${k}"><span>${tx(r.name)}</span></label>`)}</div></div>
       ${field(L('评语（关键证据）', 'Notes (key evidence)'), textarea('notes', { rows: 3 }), { span: true })}`,
     submitLabel: L('提交评分', 'Submit scorecard'),
@@ -484,14 +484,14 @@ async function screenView(el, ctx, d) {
     <div class="split-wide">
       <section class="card sticky">
         <div class="card-head"><h2>${L('批量筛选简历', 'Screen resumes in bulk')}</h2></div>
-        <form id="screen-form" class="stack" style="gap:12px">
+        <form id="screen-form" class="gap-3 stack">
           ${field(L('目标职位', 'Target job'), select('pos', open.map((p) => [p.id, loc(p, 'title')]), { value: posId }))}
           ${field(L('简历文本', 'Resume text'), textarea('text', { rows: 12, placeholder: L('粘贴一份或多份简历；多份之间用单独一行 --- 分隔', 'Paste one or more resumes; separate them with a line containing ---') }), { hint: L('支持 .docx / .txt / .md，可多选。Word 每份最多 10 MB；只提取正文，图片需转为文字。', 'Import .docx / .txt / .md files (multiple allowed). Word: up to 10 MB each; body text only, images need transcription.') })}
           <input type="file" id="files" accept=".docx,.txt,.md,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple class="small" aria-label="${L('导入简历文件', 'Import resume files')}">
           <div id="resume-file-status" aria-live="polite" class="small"></div>
           <div class="row"><button class="btn btn-primary" type="submit">${icon('search')}${L('开始筛选', 'Screen')}</button><button class="btn" type="button" data-sample>${L('载入示例简历', 'Load sample resumes')}</button></div>
         </form>
-        <div style="margin-top:14px">${method(L('评分方法：', 'How scoring works:'), L(`必备技能 ${WEIGHTS.required}% · 加分技能 ${WEIGHTS.nice}% · 经验 ${WEIGHTS.experience}% · 学历 ${WEIGHTS.education}% · 证书/量化成果/稳定性 ${WEIGHTS.bonus}%。院校、年龄、性别等与岗位无关的信息不计分，以减少筛选偏见。`, `Required skills ${WEIGHTS.required}% · nice-to-have ${WEIGHTS.nice}% · experience ${WEIGHTS.experience}% · education ${WEIGHTS.education}% · certificates, quantified results and stability ${WEIGHTS.bonus}%. School, age, gender and other job-irrelevant data never score, to reduce screening bias.`))}</div>
+        <div class="mt-3">${method(L('评分方法：', 'How scoring works:'), L(`必备技能 ${WEIGHTS.required}% · 加分技能 ${WEIGHTS.nice}% · 经验 ${WEIGHTS.experience}% · 学历 ${WEIGHTS.education}% · 证书/量化成果/稳定性 ${WEIGHTS.bonus}%。院校、年龄、性别等与岗位无关的信息不计分，以减少筛选偏见。`, `Required skills ${WEIGHTS.required}% · nice-to-have ${WEIGHTS.nice}% · experience ${WEIGHTS.experience}% · education ${WEIGHTS.education}% · certificates, quantified results and stability ${WEIGHTS.bonus}%. School, age, gender and other job-irrelevant data never score, to reduce screening bias.`))}</div>
       </section>
       <section id="screen-results">${empty(L('结果将显示在这里', 'Results appear here'), L('选择职位并粘贴简历，系统将自动解析并排序。', 'Pick a job and paste resumes to parse and rank them.'), 'file')}</section>
     </div>`);
@@ -587,8 +587,8 @@ async function interviewView(el, ctx, d) {
   const pos = d.positions.find((p) => p.id === ctx.query.pos) || open[0];
   const plan = planInterview(pos || {});
   setHTML(el, html`
-    <div class="row-between no-print" style="margin-bottom:12px">
-      <div class="row"><label class="small muted" for="kit-pos">${L('职位', 'Job')}</label><select class="input" id="kit-pos" style="width:auto">${d.positions.map((p) => html`<option value="${p.id}" ${p.id === pos?.id ? 'selected' : ''}>${loc(p, 'title')}</option>`)}</select></div>
+    <div class="mb-3 row-between no-print">
+      <div class="row"><label class="small muted" for="kit-pos">${L('职位', 'Job')}</label><select class="w-auto input" id="kit-pos">${d.positions.map((p) => html`<option value="${p.id}" ${p.id === pos?.id ? 'selected' : ''}>${loc(p, 'title')}</option>`)}</select></div>
       <button class="btn" type="button" data-print>${icon('printer')}${L('打印面试指南', 'Print guide')}</button>
     </div>
     <div class="split">
@@ -596,12 +596,12 @@ async function interviewView(el, ctx, d) {
         <section class="card">
           <div class="card-head"><div><h2>${L('结构化面试指南', 'Structured interview guide')} · ${loc(pos, 'title')}</h2><p>${L(`岗位序列：${tx(FAMILIES[plan.family].name)} · 职级 ${pos?.level}`, `Job family: ${tx(FAMILIES[plan.family].name)} · Level ${pos?.level}`)}</p></div></div>
           ${plan.focus.map((k, idx) => html`<div class="q-block">
-            <h3 style="font-size:15px">${idx + 1}. ${tx(compByKey[k].name)} <span class="badge">${tx(ROUNDS.find((r) => plan.byRound[r.key].includes(k)).name)}</span></h3>
-            <p class="small muted" style="font-weight:400">${tx(compByKey[k].def)}</p>
+            <h3 class="text-md">${idx + 1}. ${tx(compByKey[k].name)} <span class="badge">${tx(ROUNDS.find((r) => plan.byRound[r.key].includes(k)).name)}</span></h3>
+            <p class="fw-normal small muted">${tx(compByKey[k].def)}</p>
             ${plan.questions[k].map((q) => html`<div style="margin:10px 0 0 4px">
               <div><strong>Q：</strong>${tx(q.q)}</div>
-              <div class="small" style="margin-top:4px"><span class="badge badge-ok">${L('好的回答', 'Strong answer')}</span> ${tx(q.good)}</div>
-              <div class="small" style="margin-top:4px"><span class="badge badge-danger">${L('警示信号', 'Red flag')}</span> ${tx(q.red)}</div></div>`)}
+              <div class="mt-1 small"><span class="badge badge-ok">${L('好的回答', 'Strong answer')}</span> ${tx(q.good)}</div>
+              <div class="mt-1 small"><span class="badge badge-danger">${L('警示信号', 'Red flag')}</span> ${tx(q.red)}</div></div>`)}
           </div>`)}
         </section>
         <div id="ai-interview"></div>
@@ -636,7 +636,7 @@ async function jdView(el, ctx, d) {
     <div class="split-wide">
       <section class="card">
         <div class="card-head"><h2>${pos ? L(`编辑 JD · ${loc(pos, 'title')}`, `Edit JD · ${loc(pos, 'title')}`) : L('岗位信息', 'Role details')}</h2></div>
-        <form id="jd-form" class="stack" style="gap:12px">
+        <form id="jd-form" class="gap-3 stack">
           ${field(L('职位名称', 'Job title'), input('title', { value: loc(init, 'title') || init.title }))}
           <div class="form-grid">
             ${field(L('部门', 'Department'), select('deptId', d.departments.map((x) => [x.id, loc(x)]), { value: init.deptId }))}
@@ -654,7 +654,7 @@ async function jdView(el, ctx, d) {
           <div class="card-head"><h2>${L('JD 草稿', 'JD draft')}</h2><div class="row">
             <button class="btn btn-sm" type="button" data-copy>${icon('copy')}${L('复制', 'Copy')}</button>
             ${pos ? html`<button class="btn btn-sm btn-primary" type="button" data-save>${L('保存到职位', 'Save to job')}</button>` : ''}</div></div>
-          <textarea class="input mono" id="jd-text" rows="18"></textarea>
+          <textarea class="input mono" id="jd-text" rows="18" aria-label="${L('职位描述内容', 'Job description text')}"></textarea>
           <div class="section-title">${L('合规与包容性检查', 'Compliance & inclusive language check')}</div>
           <div id="jd-check"></div>
         </section>
@@ -703,7 +703,7 @@ function crossRolePanel(p, d) {
   const gap = hiringGap(p, d.candidates, today());
   if (!gap.urgent) return '';
   const recommendations = crossRoleRecommendations(p, d.candidates, today(), lang());
-  return html`<section class="card" style="margin:16px 0">
+  return html`<section class="my-4 card">
     <div class="card-head"><div><h2>${L('跨岗智能推荐', 'Cross-role recommendations')} · ${loc(p, 'title')}</h2><p>${L('高优先级岗位开放超过30天且未招满；从其他岗位和人才池筛选，排除已入职和Offer阶段。', 'High-priority role open over 30 days with vacancies. Search other roles and the talent pool, excluding hired and offer-stage candidates.')}</p></div>${badge(L(`开放 ${gap.days} 天 · 缺 ${gap.remaining} 人`, `${gap.days} days · ${gap.remaining} unfilled`), 'danger')}</div>
     <p class="small muted">${L('硬性条件：最低工作年限、最低学历、全部必备技能均须满足；信息不足不入选。适配分沿用简历匹配模型（技能45%、加分技能10%、经验20%、学历15%、其他证据10%）。推荐不改变原申请岗位，需人工确认意愿及未通过原因。', 'Hard filters: minimum experience, education and all required skills; missing evidence does not pass. Fit score uses skills 45%, nice-to-have 10%, experience 20%, education 15%, other evidence 10%. Recommendations preserve applications; confirm interest and any rejection reasons.')}</p>
     <div class="grid cols-3">${recommendations.map(({candidate:c, parsed, match}) => html`<div class="card"><div class="row-between"><a href="#/recruit/pipeline/${c.id}"><strong>${personName(c)}</strong></a>${badge(`${match.score}/100`, 'brand')}</div><p class="small">${L('原申请岗位：', 'Original role: ')}${loc(d.positions.find(x => x.id === c.positionId), 'title') || L('人才池', 'Talent pool')} · ${stageBadge(c.stage)}</p><p class="small">${L('适配理由：', 'Fit evidence: ')}${match.highlights.join('；')}</p><div class="small muted">${L(`经验 ${parsed.years} 年；学历和全部必备技能通过`, `${parsed.years} years; education and required skills passed`)}</div></div>`)}</div>
