@@ -537,3 +537,7 @@ ul.tight li { margin: 2px 0; }
 .risk-table td { vertical-align: top; }
 
 .hiring-overdue { color: var(--danger); background: var(--danger-soft); font-weight: 700; }
+
+/* ---------------------------------------------------------------- development plan editor */
+.form-grid .span-3 { grid-column: 1 / -1; }
+.idp-focus .field textarea { min-height: 60px; }

@@ -1,4 +1,5 @@
 import { retentionView } from './retention.js';
+import { canEditPlan, idpEditor } from './idp-editor.js';
 // Training & development: 70-20-10 IDPs, training needs analysis, course catalog and program evaluation.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
@@ -103,10 +104,14 @@ async function idpDetail(el, ctx, d) {
   if (!idp) return setHTML(el, empty(L('计划不存在', 'Plan not found'), '', 'alert'));
   if (idp.mode === 'retention') return retentionView(el, ctx, { ...d, idps: [idp] });
   const emp = d.employees.find((e) => e.id === idp.employeeId) || {};
+  const detailHref = `#/learning/idp/${idp.id}`;
+  if (ctx.query.edit && canEditPlan(idp)) {
+    return idpEditor(el, { plan: idp, emp, courses: d.courses, people: d.active, cancelHref: detailHref, onSaved: () => { location.hash = detailHref; } });
+  }
   const progress = idpProgress(idp);
   setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period}</div></div></div>
-      <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong><button class="btn btn-sm" type="button" data-print>${icon('printer')}</button></div></div>
+      <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button></div></div>
     <div class="split"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true })}</div>
       <div class="stack"><div id="ai-idp"></div>
         <section class="card"><div class="card-head"><h2>${L('上级支持', 'Manager support')}</h2></div>
