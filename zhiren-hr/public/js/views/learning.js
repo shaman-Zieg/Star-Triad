@@ -68,13 +68,13 @@ async function idpView(el, ctx, d) {
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
 }
 
-function planBlocks(focus, courses, { editable = false } = {}) {
+function planBlocks(focus, courses, { editable = false, locked = false, people = [], ownerId } = {}) {
   return focus.map((f, fi) => html`<section class="card">
     <div class="card-head"><div><h2>${fi + 1}. ${tx(compByKey[f.competency].name)}</h2><p>${L(`当前 ${f.actual} → 目标 ${f.target}`, `Current ${f.actual} → target ${f.target}`)} · ${tx(compByKey[f.competency].def)}</p></div></div>
-    <p class="small"><strong>${L('SMART 目标：', 'SMART goal: ')}</strong>${L(`在 6 个月内将「${tx(compByKey[f.competency].name)}」提升到 ${f.target} 级，表现为：${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`, `Within 6 months, reach level ${f.target} in ${tx(compByKey[f.competency].name)}, shown by: ${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`)}</p>
+    <p class="small"><strong>${L('SMART 目标：', 'SMART goal: ')}</strong>${f.goal ? tx(f.goal) : L(`在 6 个月内将「${tx(compByKey[f.competency].name)}」提升到 ${f.target} 级，表现为：${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`, `Within 6 months, reach level ${f.target} in ${tx(compByKey[f.competency].name)}, shown by: ${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`)}</p>
     ${f.actions.map((a, ai) => html`<div class="list-item">
-      ${editable ? html`<input type="checkbox" data-toggle="${fi}:${ai}" ${a.done ? 'checked' : ''} aria-label="${L('完成', 'Done')}">` : ''}
-      <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(ACTION_TYPES[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}</div></div>
+      ${editable ? html`<input type="checkbox" data-toggle="${fi}:${ai}" ${a.done ? 'checked' : ''} ${locked ? 'disabled' : ''} aria-label="${L('完成', 'Done')}">` : ''}
+      <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(ACTION_TYPES[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}${a.ownerId && a.ownerId !== ownerId ? ` · ${L('负责人', 'Owner')} ${personName(people.find((p) => p.id === a.ownerId))}` : ''}</div></div>
       ${badge(a.type === '70' ? '70' : a.type === '20' ? '20' : '10', a.type === '70' ? 'brand' : '')}</div>`)}
   </section>`);
 }
@@ -110,10 +110,13 @@ async function idpDetail(el, ctx, d) {
     return idpEditor(el, { plan: idp, emp, courses: d.courses, people: d.active, cancelHref: detailHref, onSaved: () => { location.hash = detailHref; } });
   }
   const progress = idpProgress(idp);
+  const ended = idp.status !== 'active';
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period}</div></div></div>
+    <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period} ${badge(tx(IDP_STATUS[idp.status]?.name || [idp.status, idp.status]), IDP_STATUS[idp.status]?.tone)}</div></div></div>
       <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button></div></div>
-    <div class="split"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true })}</div>
+    ${ended ? callout('info', html`${L('该计划已结束，行动不再计入待办。', 'This plan has ended; its actions no longer appear in task lists.')} ${canEditPlan(idp) ? html`<button class="btn btn-sm no-print" type="button" data-status="active">${L('重新开启', 'Reopen')}</button>` : ''}`) : ''}
+    ${!ended && progress === 100 && canEditPlan(idp) ? callout('ok', html`${L('所有行动都已完成。', 'Every action is done.')} <button class="btn btn-sm no-print" type="button" data-status="completed">${icon('check')}${L('标记计划为已完成', 'Mark plan completed')}</button>`) : ''}
+    <div class="split" style="margin-top:12px"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true, locked: ended, people: d.employees, ownerId: idp.employeeId })}</div>
       <div class="stack"><div id="ai-idp"></div>
         <section class="card"><div class="card-head"><h2>${L('上级支持', 'Manager support')}</h2></div>
           <ul class="small" style="margin:0;padding-left:18px"><li>${L('每月一次发展对话，回顾行动进展', 'Monthly development conversation to review progress')}</li><li>${L('提供挑战性任务与曝光机会', 'Provide stretch work and visibility')}</li><li>${L('季度末对照行为锚点给出反馈', 'Feedback against the anchors each quarter')}</li></ul></section></div></div>`);
@@ -122,6 +125,10 @@ async function idpDetail(el, ctx, d) {
     const focus = structuredClone(idp.focus);
     focus[fi].actions[ai].done = cb.checked;
     await act(null, () => api.put(`/api/idps/${idp.id}`, { focus }));
+    ctx.rerender();
+  });
+  on(el, 'click', '[data-status]', async (e, b) => {
+    await act(b, () => api.put(`/api/idps/${idp.id}`, { status: b.dataset.status }), L('计划状态已更新', 'Plan status updated'));
     ctx.rerender();
   });
   on(el, 'click', '[data-print]', () => window.print());
