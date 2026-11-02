@@ -96,3 +96,16 @@ test('RACI cells accept the combined A/R role', () => {
   assert.deepEqual(validationErrors('raci', matrix), []);
   assert.ok(validationErrors('raci', { ...matrix, steps: [{ name: 'Step', cells: ['R/A'] }] }).length);
 });
+
+test('development plans reject empty, duplicated or backwards focus areas', () => {
+  const action = { type: '70', text: ['实践', 'Practice'], due: '2026-12-01', done: false };
+  const area = (patch = {}) => ({ competency: 'learning', actual: 2, target: 3, actions: [action], ...patch });
+  const plan = (focus) => ({ employeeId: 'e1', status: 'active', mode: 'gap', focus });
+  assert.deepEqual(validationErrors('idps', plan([area()])), []);
+  assert.deepEqual(validationErrors('idps', plan([area({ goal: ['自定义目标', 'Custom goal'] })])), []);
+  assert.match(validationErrors('idps', plan([])).join(' '), /at least one focus/);
+  assert.match(validationErrors('idps', plan([area(), area()])).join(' '), /more than once/);
+  assert.match(validationErrors('idps', plan([area({ actual: 4, target: 3 })])).join(' '), /below the current level/);
+  assert.match(validationErrors('idps', plan([area({ actions: [] })])).join(' '), /at least one action/);
+  assert.match(validationErrors('idps', plan([area({ goal: ['', ''] })])).join(' '), /goal/);
+});
