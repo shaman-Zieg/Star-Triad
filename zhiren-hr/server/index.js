@@ -240,6 +240,12 @@ async function handleApi(req, res, url, auth) {
     const existing = db.get(col, id);
     if (!existing) throw new HttpError(404, 'Not found');
     body = cleanPatch(body);
+    if (col === 'idps') {
+      // Plans are saved whole, so an edit based on an old copy would silently undo someone else's.
+      const { expectedUpdatedAt, ...rest } = body;
+      if (expectedUpdatedAt && expectedUpdatedAt !== existing.updatedAt) throw new HttpError(409, 'This plan was changed by someone else. Reload it and try again.');
+      body = rest;
+    }
     if (auth.required) delete body.createdBy;
     body = authorizeWrite(col, method, body, existing, user);
     if (col === 'idps') {

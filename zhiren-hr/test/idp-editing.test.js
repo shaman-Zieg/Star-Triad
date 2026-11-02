@@ -78,3 +78,14 @@ test('an employee has at most one active development plan', async () => {
   const left = db.list('employees').find((e) => e.status === 'left');
   assert.equal((await call('POST', '/api/idps', { ...body, employeeId: left.id })).status, 400);
 });
+
+test('saving from a stale copy is refused instead of overwriting newer changes', async () => {
+  const [plan] = plans();
+  const stale = '2000-01-01 00:00:00';
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { period: 'stale', expectedUpdatedAt: stale })).status, 409);
+  assert.notEqual(db.get('idps', plan.id).period, 'stale');
+  const current = db.get('idps', plan.id).updatedAt;
+  const saved = await call('PUT', `/api/idps/${plan.id}`, { period: 'fresh', expectedUpdatedAt: current });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.expectedUpdatedAt, undefined, 'the check is not stored on the plan');
+});
