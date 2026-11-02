@@ -3,7 +3,7 @@
 // are kept separate, and nothing is said about a person that the data does not show.
 import { COMP_KEYS, compByKey, targetProfile, assessCompetencies, ladderInfo, BANDS } from './competency.js';
 import { boxOf, flightRisk, PERF_SCALE, isPerformanceRating, isPotentialRating } from './talent.js';
-import { EXPERIENCES, idpProgress } from './learning.js';
+import { EXPERIENCES, activeDevelopmentPlan, idpProgress } from './learning.js';
 import { STATUS as SUCC_STATUS, COVERAGE } from './succession.js';
 import { personFamily } from './jd.js';
 import { monthsBetween, round, pick } from './text.js';
@@ -79,7 +79,7 @@ export function buildFacts(emp, ctx) {
       for (const n of ev.nominations.filter((x) => x.employee.id === emp.id)) add(`cand_${ev.plan.id}`, 'succession_candidate', T(`被提名为「${ev.plan.title}」继任候选，状态：${pick(SUCC_STATUS[n.status].name, 'zh')}`, `Nominated for "${ev.plan.titleEn || ev.plan.title}", status: ${pick(SUCC_STATUS[n.status].name, 'en')}`), n.status);
     }
   }
-  const idp = idps.find((i) => i.employeeId === emp.id && i.status !== 'closed');
+  const idp = activeDevelopmentPlan(idps, emp.id);
   if (idp) add('idp', 'learning', T(`有在执行的发展计划，完成度 ${idpProgress(idp)}%`, `Active development plan, ${idpProgress(idp)}% complete`), idpProgress(idp));
   else add('no_idp', 'learning', T('暂无发展计划', 'No development plan'), null);
   const mine = enrollments.filter((e) => e.employeeId === emp.id);
