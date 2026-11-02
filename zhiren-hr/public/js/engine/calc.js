@@ -11,7 +11,10 @@ export function annualLeave({ totalYears, joinDate, year }) {
   if (joinDate && full) {
     const j = parseYmd(joinDate);
     const y = Number(year) || j.getFullYear();
-    if (j.getFullYear() === y) {
+    if (j.getFullYear() > y) {
+      // Not with the company yet in the chosen year.
+      days = 0;
+    } else if (j.getFullYear() === y) {
       // (remaining calendar days / 365) x entitlement, fractions of a day dropped.
       const end = new Date(y, 11, 31);
       const remaining = Math.round((end - j) / 86400000) + 1;
@@ -26,9 +29,9 @@ export function annualLeave({ totalYears, joinDate, year }) {
 export function overtimePay({ monthly, weekday = 0, restday = 0, holiday = 0 }) {
   const hourly = (Number(monthly) || 0) / 21.75 / 8;
   const parts = {
-    weekday: hourly * 1.5 * (Number(weekday) || 0),
-    restday: hourly * 2 * (Number(restday) || 0),
-    holiday: hourly * 3 * (Number(holiday) || 0),
+    weekday: hourly * 1.5 * Math.max(0, Number(weekday) || 0),
+    restday: hourly * 2 * Math.max(0, Number(restday) || 0),
+    holiday: hourly * 3 * Math.max(0, Number(holiday) || 0),
   };
   return { hourly: round(hourly, 2), parts: Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, round(v, 2)])), total: round(parts.weekday + parts.restday + parts.holiday, 2) };
 }

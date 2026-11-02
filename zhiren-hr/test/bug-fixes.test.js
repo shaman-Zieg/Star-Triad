@@ -45,3 +45,10 @@ test('a zero conversion rate is reported instead of being read as 100%', async (
   assert.deepEqual(recruitingFunnel({ hires: 2, rates: { ...rates, screen: '0' } }).blocked, ['screen']);
   assert.deepEqual(recruitingFunnel({ hires: 2, rates: { ...rates, screen: '' } }).blocked, []);
 });
+
+test('statutory calculators handle a future join date and negative hours', async () => {
+  const { annualLeave, overtimePay } = await import('../public/js/engine/calc.js');
+  assert.equal(annualLeave({ totalYears: 6, joinDate: '2027-03-01', year: 2026 }).days, 0);
+  assert.equal(annualLeave({ totalYears: 6, joinDate: '2025-03-01', year: 2026 }).days, 5);
+  assert.equal(overtimePay({ monthly: 15000, weekday: -10 }).total, 0);
+});
