@@ -54,7 +54,8 @@ export function radar({ axes, series, max = 5, size = 340, format = (v) => fmt.n
   const pt = (i, v) => [cx + Math.cos(angle(i)) * r * (v / max), cy + Math.sin(angle(i)) * r * (v / max)];
   const rings = Array.from({ length: max }, (_, k) => k + 1);
   const svg = [];
-  svg.push(`<svg viewBox="0 0 ${size} ${size}" role="img" aria-label="${esc(series.map((s) => s.name).join(' / '))}">`);
+  // Side margin: labels start beyond the outer ring and long ones would otherwise be cut off.
+  svg.push(`<svg viewBox="-48 0 ${size + 96} ${size}" role="img" aria-label="${esc(series.map((s) => s.name).join(' / '))}">`);
   for (const k of rings) svg.push(`<polygon class="grid-line" points="${axes.map((_, i) => pt(i, k).join(',')).join(' ')}"/>`);
   axes.forEach((a, i) => {
     const [x, y] = pt(i, max);
