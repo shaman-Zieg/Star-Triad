@@ -95,8 +95,12 @@ function wireShell() {
   appEl.querySelector('[data-reset]')?.addEventListener('click', async (e) => {
     e.preventDefault();
     if (!(await confirmDialog(L('将删除所有修改并重新生成演示数据，确定继续？', 'This deletes all changes and regenerates the demo data. Continue?'), { danger: true, confirmLabel: L('重置', 'Reset') }))) return;
-    await api.post('/api/admin/reset', {});
-    await reloadEmployees();
+    try {
+      await api.post('/api/admin/reset', {});
+      await reloadEmployees();
+    } catch (err) {
+      return toast(err.message, 'error');
+    }
     toast(L('演示数据已重置', 'Demo data reset'));
     shell();
     route();
@@ -307,7 +311,6 @@ async function boot() {
       location.hash = target;
       return;
     }
-    const r = parseHash();
     route();
     window.scrollTo(0, 0);
   });
