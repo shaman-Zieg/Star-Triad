@@ -4,7 +4,7 @@ import { L, tx, loc, STAGES } from '../i18n.js';
 import { hbars, columns } from '../charts.js';
 import { flightRisk, boxKey } from '../engine/talent.js';
 import { evaluateAll } from '../engine/succession.js';
-import { isOverdue } from '../engine/service.js';
+import { activityStatusWord, isOverdue } from '../engine/service.js';
 import { learningStats } from '../engine/learning.js';
 import { trailingTurnover, stageReach } from '../engine/calc.js';
 import { parseYmd } from '../engine/text.js';
@@ -16,7 +16,6 @@ const COL_NAMES = {
   courses: ['课程', 'course'], enrollments: ['学习记录', 'enrollment'], kb: ['制度文章', 'policy article'], onboarding: ['入职计划', 'onboarding plan'], raci: ['协作矩阵', 'RACI matrix'], departments: ['部门', 'department'],
 };
 const VERBS = { create: ['新建了', 'created'], update: ['更新了', 'updated'], delete: ['删除了', 'deleted'] };
-const STATUS_WORD = { open: ['待处理', 'open'], in_progress: ['处理中', 'in progress'], resolved: ['已解决', 'resolved'], closed: ['已关闭', 'closed'], paused: ['暂停', 'paused'] };
 
 export function activityLine(a) {
   const who = a.actor ? (L(a.actor.name, a.actor.nameEn || a.actor.name)) : L('匿名', 'Someone');
@@ -24,7 +23,7 @@ export function activityLine(a) {
   const label = a.col === 'responses' ? '' : L(a.label || '', a.labelEn || a.label || '');
   let detail = '';
   if (a.detail?.field === 'stage') detail = L(`：${tx(STAGES[a.detail.from] || [a.detail.from])} → ${tx(STAGES[a.detail.to] || [a.detail.to])}`, `: ${tx(STAGES[a.detail.from] || [a.detail.from, a.detail.from])} → ${tx(STAGES[a.detail.to] || [a.detail.to, a.detail.to])}`);
-  else if (a.detail?.field === 'status') detail = ` → ${tx(STATUS_WORD[a.detail.to] || [a.detail.to, a.detail.to])}`;
+  else if (a.detail?.field === 'status') detail = ` → ${tx(activityStatusWord(a.col, a.detail.to))}`;
   if (a.col === 'responses') return L(`${who}提交了一份匿名问卷`, `${who} submitted an anonymous survey response`);
   return L(`${who} ${tx(VERBS[a.action])}${what}「${label}」${detail}`, `${who} ${tx(VERBS[a.action])} ${what} "${label}"${detail}`);
 }

@@ -24,3 +24,13 @@ test('a new hire with no ratings is valid and stays outside the talent grid', as
   assert.equal(boxKey(hire.performance, hire.potential), null);
   assert.equal(flightRisk(hire, TODAY).regrettable, false);
 });
+
+test('the activity feed words a status change for the kind of record', async () => {
+  const { activityStatusWord } = await import('../public/js/engine/service.js');
+  assert.equal(activityStatusWord('idps', 'completed')[0], '已完成');
+  assert.equal(activityStatusWord('idps', 'active')[0], '进行中');
+  assert.equal(activityStatusWord('employees', 'active')[0], '在职');
+  assert.equal(activityStatusWord('positions', 'open')[0], '招聘中');
+  assert.equal(activityStatusWord('tickets', 'open')[0], '待处理');
+  assert.deepEqual(activityStatusWord('raci', 'odd'), ['odd', 'odd']);
+});

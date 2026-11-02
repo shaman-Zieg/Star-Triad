@@ -28,6 +28,16 @@ export function dueDate(createdAt, slaDays) {
   }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// How a status change reads in the activity feed; the same word can mean different things per record type.
+const STATUS_BY_COL = {
+  idps: { active: ['进行中', 'active'], completed: ['已完成', 'completed'], cancelled: ['已取消', 'cancelled'] },
+  employees: { active: ['在职', 'active'], left: ['已离职', 'left'] },
+  positions: { open: ['招聘中', 'open'], paused: ['暂停', 'paused'], closed: ['已关闭', 'closed'] },
+  surveys: { open: ['进行中', 'open'], closed: ['已结束', 'closed'] },
+  tickets: { open: ['待处理', 'open'], in_progress: ['处理中', 'in progress'], resolved: ['已解决', 'resolved'] },
+};
+export const activityStatusWord = (col, status) => STATUS_BY_COL[col]?.[status] || [status, status];
+
 export const isOverdue = (t, today) => t.status !== 'resolved' && dueDate(t.createdAt, TICKET_TYPES[t.type]?.sla || 3) < today;
 
 // The HR department(s), found by name so request assignment does not depend on seeded ids.
