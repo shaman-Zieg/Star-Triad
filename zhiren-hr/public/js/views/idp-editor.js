@@ -1,5 +1,5 @@
 // Editing a development plan: levels, goals and 70-20-10 actions, saved together.
-import { html, setHTML, api, today, personName, avatar, badge, callout, field, input, meter, on, toast, hasRole, getActor, icon } from '../core.js';
+import { html, setHTML, api, today, personName, avatar, badge, callout, field, input, meter, on, setLeaveGuard, toast, hasRole, getActor, icon } from '../core.js';
 import { L, tx, loc } from '../i18n.js';
 import { compByKey, COMPETENCIES, gaps, targetProfile } from '../engine/competency.js';
 import { ACTION_TYPES, IDP_STATUS, idpDraftErrors, idpMix, newAction, newFocusArea } from '../engine/learning.js';
@@ -27,6 +27,8 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
   const isNew = !plan.id;
   const draft = { period: plan.period || String(new Date().getFullYear()), status: plan.status || 'active', focus: structuredClone(plan.focus || []) };
   const defaultDue = () => addDays(today(), 60);
+  let dirty = false;
+  setLeaveGuard(() => dirty);
   // Errors stay quiet until the first save attempt, then update as each one is fixed.
   let checking = false;
   const usedElsewhere = (fi) => new Set(draft.focus.filter((_, i) => i !== fi).map((f) => f.competency));
@@ -89,7 +91,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
   };
   const render = () => setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="${cancelHref}" class="small">← ${L('返回', 'Back')}</a><h2 style="font-size:19px">${isNew ? L('新建发展计划', 'New development plan') : L('编辑发展计划', 'Edit development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
-      <div class="row"><a class="btn" href="${cancelHref}">${L('取消', 'Cancel')}</a><button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div></div>
+      <div class="row"><span class="badge badge-warn" data-dirty ${dirty ? '' : 'hidden'}>${L('未保存', 'Unsaved')}</span><a class="btn" href="${cancelHref}">${L('取消', 'Cancel')}</a><button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div></div>
     ${intro || ''}
     <div class="idp-errors" role="alert" hidden></div>
     <div class="split" style="margin-top:12px"><div class="stack">
@@ -106,6 +108,14 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     markErrors();
   };
 
+  // Every control writes to the draft, so any input or change inside the form is an edit.
+  const markDirty = () => {
+    dirty = true;
+    el.querySelector('[data-dirty]')?.removeAttribute('hidden');
+  };
+  el.addEventListener('input', markDirty);
+  el.addEventListener('change', markDirty);
+  el.addEventListener('click', (e) => { if (e.target.closest('[data-add-action], [data-del-action], [data-add-focus], [data-del-focus]')) markDirty(); });
   const at = (value) => draft.focus[Number(value)];
   on(el, 'input', '[name=period]', (e, box) => { draft.period = box.value; });
   on(el, 'change', '[name=status]', (e, box) => { draft.status = box.value; });
@@ -186,6 +196,8 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
       const saved = isNew
         ? await api.post('/api/idps', { ...body, employeeId: emp.id, status: 'active', mode: plan.mode, name: emp.name, nameEn: emp.nameEn })
         : await api.put(`/api/idps/${plan.id}`, { ...body, status: draft.status });
+      dirty = false;
+      setLeaveGuard(null);
       toast(L('发展计划已保存', 'Plan saved'));
       onSaved(saved);
     } catch (err) {
