@@ -34,3 +34,14 @@ test('the activity feed words a status change for the kind of record', async () 
   assert.equal(activityStatusWord('tickets', 'open')[0], '待处理');
   assert.deepEqual(activityStatusWord('raci', 'odd'), ['odd', 'odd']);
 });
+
+test('a zero conversion rate is reported instead of being read as 100%', async () => {
+  const { recruitingFunnel } = await import('../public/js/engine/calc.js');
+  const rates = { applied: 50, screen: 50, interview: 50, offer: 50 };
+  const counts = (r) => recruitingFunnel({ hires: 2, rates: r }).stages.map((s) => s.count);
+  assert.deepEqual(counts(rates), [32, 16, 8, 4, 2]);
+  assert.deepEqual(recruitingFunnel({ hires: 2, rates }).blocked, []);
+  assert.deepEqual(recruitingFunnel({ hires: 2, rates: { ...rates, screen: 0 } }).blocked, ['screen']);
+  assert.deepEqual(recruitingFunnel({ hires: 2, rates: { ...rates, screen: '0' } }).blocked, ['screen']);
+  assert.deepEqual(recruitingFunnel({ hires: 2, rates: { ...rates, screen: '' } }).blocked, []);
+});

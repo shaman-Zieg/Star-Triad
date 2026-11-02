@@ -66,11 +66,15 @@ export function turnover({ leavers, startHeadcount, endHeadcount, months = 12, v
 export function recruitingFunnel({ hires, rates, costs = 0, daysToFill }) {
   const stages = ['applied', 'screen', 'interview', 'offer', 'hired'];
   const need = { hired: Number(hires) || 0 };
+  // A blank rate means no drop-off. A zero rate can never yield a hire, so it is reported, not hidden.
+  const blocked = [];
   for (let i = stages.length - 2; i >= 0; i--) {
-    const r = (Number(rates[stages[i]]) || 100) / 100;
-    need[stages[i]] = Math.ceil(need[stages[i + 1]] / (r || 1));
+    const raw = rates[stages[i]];
+    const r = raw === '' || raw == null ? 1 : Number(raw) / 100;
+    if (!(r > 0)) blocked.push(stages[i]);
+    need[stages[i]] = Math.ceil(need[stages[i + 1]] / (r > 0 ? r : 1));
   }
-  return { stages: stages.map((s) => ({ stage: s, count: need[s] })), costPerHire: need.hired ? Math.round((Number(costs) || 0) / need.hired) : null, daysToFill: Number(daysToFill) || null };
+  return { blocked, stages: stages.map((s) => ({ stage: s, count: need[s] })), costPerHire: need.hired ? Math.round((Number(costs) || 0) / need.hired) : null, daysToFill: Number(daysToFill) || null };
 }
 
 // Headcount plan: hires needed to reach a target given expected attrition.

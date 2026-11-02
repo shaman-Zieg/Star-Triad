@@ -170,7 +170,7 @@ async function calculator(el, key) {
     } else if (key === 'funnel') {
       const r = recruitingFunnel({ hires: v.hires, rates: v, costs: v.costs });
       const names = { applied: L('需收简历', 'Applicants'), screen: L('初筛通过', 'Screened'), interview: L('进入面试', 'Interviewed'), offer: L('发出 Offer', 'Offers'), hired: L('录用', 'Hires') };
-      content = html`${hbars(r.stages.map((s, i) => ({ label: names[s.stage], value: s.count, cls: `seq-${i + 1}` })), { table: false })}
+      content = html`${r.blocked.length ? callout('warn', L('有转化率为 0 或无效，按此无法招到人；下方数字未计入这些环节，请填写大于 0 的比例。', 'A conversion rate is zero or invalid, so no hires can result; the figures below ignore those steps. Enter a rate above 0.')) : ''}${hbars(r.stages.map((s, i) => ({ label: names[s.stage], value: s.count, cls: `seq-${i + 1}` })), { table: false })}
         <div class="row" style="gap:28px;margin-top:12px">${big(L('人均招聘成本', 'Cost per hire'), r.costPerHire != null ? fmt.money(r.costPerHire) : '—', 'brand-text')}</div>
         ${method(L('用法：', 'Use:'), L('用历史转化率倒推需要的简历量，判断渠道投入是否足够；转化率异常低的环节就是优化重点。', 'Use historical conversion rates to size sourcing; the stage with an unusually low rate is where to improve.'))}`;
     } else {
