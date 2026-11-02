@@ -113,3 +113,15 @@ test('aggregation is stable, deduplicated and does not mutate source records', (
   assert.equal(first.filter(item => item.kind === 'interview').length, 1);
   assert.deepEqual(data, before);
 });
+
+test('the dashboard reminder ignores candidates who have left the process', async () => {
+  const { unscoredInterviews } = await import('../public/js/engine/todos.js');
+  const interview = { id: 'i', interviewerId: 'x', date: '2026-10-01', scores: {}, recommendation: null };
+  const scored = { ...interview, scores: { learning: 4 }, recommendation: 'yes' };
+  const person = (stage, interviews = [interview]) => ({ id: stage, stage, interviews });
+  const ids = (candidates, today = '2026-10-21') => unscoredInterviews(candidates, today).map((x) => x.c.id);
+  assert.deepEqual(ids([person('interview'), person('rejected'), person('hired')]), ['interview']);
+  assert.deepEqual(ids([person('interview', [scored])]), []);
+  assert.deepEqual(ids([person('interview')], '2026-10-01'), [], 'not overdue on the day itself');
+  assert.deepEqual(ids([{ id: 'none', stage: 'screen' }]), []);
+});

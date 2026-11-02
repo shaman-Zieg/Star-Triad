@@ -8,6 +8,7 @@ import { isOverdue } from '../engine/service.js';
 import { learningStats } from '../engine/learning.js';
 import { trailingTurnover, stageReach } from '../engine/calc.js';
 import { parseYmd } from '../engine/text.js';
+import { unscoredInterviews } from '../engine/todos.js';
 
 const COL_NAMES = {
   candidates: ['候选人', 'candidate'], positions: ['职位', 'job'], employees: ['员工档案', 'employee record'], tickets: ['服务申请', 'request'],
@@ -66,7 +67,7 @@ export default async function home(el) {
   const risky = active.map((e) => ({ e, r: flightRisk(e, T) })).filter((x) => x.r && x.r.level === 'high' && x.r.regrettable);
   if (risky.length) alerts.push({ tone: 'warn', href: '#/talent/risk', text: L(`${risky.length} 名核心人才流失风险高，建议本月完成保留沟通`, `${risky.length} key people at high flight risk; hold retention conversations this month`) });
   if (overdue.length) alerts.push({ tone: 'warn', href: '#/service/requests', text: L(`${overdue.length} 个员工服务申请已超过 SLA`, `${overdue.length} employee request(s) past their SLA`) });
-  const awaiting = d.candidates.flatMap((c) => (c.interviews || []).filter((i) => !Object.keys(i.scores || {}).length && i.date < T).map((i) => ({ c, i })));
+  const awaiting = unscoredInterviews(d.candidates, T);
   if (awaiting.length) alerts.push({ tone: 'info', href: '#/recruit/pipeline', text: L(`${awaiting.length} 场面试已结束但未提交评分表`, `${awaiting.length} interview(s) finished without a scorecard`) });
   const stale = d.candidates.filter((c) => c.stage === 'applied' && daysBetween(c.appliedAt, T) > 5);
   if (stale.length) alerts.push({ tone: 'info', href: '#/recruit/pipeline', text: L(`${stale.length} 位候选人投递超过 5 天未筛选`, `${stale.length} applicant(s) waiting more than 5 days for screening`) });

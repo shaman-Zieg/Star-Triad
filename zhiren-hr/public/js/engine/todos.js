@@ -26,6 +26,10 @@ const owner = (explicit, fallback) => typeof explicit === 'string' && explicit.t
 export const hasInterviewFeedback = interview => ['strong_yes', 'yes', 'no', 'strong_no'].includes(interview.recommendation)
   && Object.values(interview.scores || {}).length > 0
   && Object.values(interview.scores || {}).every(v => Number.isInteger(v) && v >= 1 && v <= 5);
+// Interviews that have taken place without feedback, for candidates still in the process.
+export const unscoredInterviews = (candidates, today) => list(candidates)
+  .filter((c) => ['applied', 'screen', 'interview', 'offer'].includes(c.stage))
+  .flatMap((c) => list(c.interviews).filter((i) => i.date < today && !hasInterviewFeedback(i)).map((i) => ({ c, i })));
 const label = (document, field = 'name') => [document?.[field] || '—', document?.[`${field}En`] || document?.[field] || '—'];
 const pathId = id => encodeURIComponent(id);
 
