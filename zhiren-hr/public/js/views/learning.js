@@ -8,7 +8,7 @@ import {
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel, assessCompetencies } from '../engine/competency.js';
 import { ACTION_TYPES, IDP_STATUS, activeDevelopmentPlan, buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
-import { radar, heatmap, seqColor, hbars } from '../charts.js';
+import { heatmap, seqColor, hbars } from '../charts.js';
 import { mountReport } from '../ai.js';
 
 const SUBS = [
