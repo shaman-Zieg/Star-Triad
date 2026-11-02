@@ -74,7 +74,7 @@ const SCHEMAS = {
   idps: {
     employeeId: required(ref('employees')), period: str(80), status: required(choice(['active', 'completed', 'cancelled'])), mode: required(choice(['gap', 'growth', 'mastery', 'unassessed', 'retention'])), name: str(), nameEn: str(),
     focus: arr(obj({ competency: required(choice(COMP_KEYS)), actual: required(num(1, 5)), target: required(num(1, 5)), goal: pair, actions: required(arr(action, 100)) }), 8),
-    startedAt: date, reviewDue: date, baseline: obj({ score: required(num(0, 100)), engagement: required(nullable(rating)), factors: required(arr(factor, 30)) }),
+    rev: num(0, 1000000000, true), startedAt: date, reviewDue: date, baseline: obj({ score: required(num(0, 100)), engagement: required(nullable(rating)), factors: required(arr(factor, 30)) }),
     actions: arr(obj({ key: required(str(80, 1)), reason: required(pair), text: required(pair), owner: required(pair), ownerId: nullable(ref('employees')), evidence: required(pair), due: required(date), done: required(bool) }), 100),
     reviews: arr(obj({ checkpoint: required(choice(['30', '60', '90'])), date: required(date), note: required(str(4000, 1)), nextStep: required(str(4000, 1)), riskScore: required(nullable(num(0, 100))), engagement: required(nullable(rating)), employmentStatus: required(status), progress: required(num(0, 100)) }), 100),
   },

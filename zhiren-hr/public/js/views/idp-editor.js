@@ -195,7 +195,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
       const body = { focus: cleanFocus(draft.focus), period: draft.period.trim() };
       const saved = isNew
         ? await api.post('/api/idps', { ...body, employeeId: emp.id, status: 'active', mode: plan.mode, name: emp.name, nameEn: emp.nameEn })
-        : await api.put(`/api/idps/${plan.id}`, { ...body, status: draft.status, expectedUpdatedAt: plan.updatedAt });
+        : await api.put(`/api/idps/${plan.id}`, { ...body, status: draft.status, expectedRev: plan.rev || 0 });
       dirty = false;
       setLeaveGuard(null);
       toast(L('发展计划已保存', 'Plan saved'));

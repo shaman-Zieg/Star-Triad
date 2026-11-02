@@ -249,8 +249,9 @@ async function handleApi(req, res, url, auth) {
     body = cleanPatch(body);
     if (col === 'idps') {
       // Plans are saved whole, so an edit based on an old copy would silently undo someone else's.
-      const { expectedUpdatedAt, ...rest } = body;
-      if (expectedUpdatedAt && expectedUpdatedAt !== existing.updatedAt) throw new HttpError(409, 'This plan was changed by someone else. Reload it and try again.');
+      // A counter rather than updatedAt, which cannot tell two saves in the same second apart.
+      const { expectedRev, rev, ...rest } = body;
+      if (expectedRev !== undefined && expectedRev !== (existing.rev || 0)) throw new HttpError(409, 'This plan was changed by someone else. Reload it and try again.');
       body = rest;
     }
     if (auth.required) delete body.createdBy;
@@ -273,6 +274,7 @@ async function handleApi(req, res, url, auth) {
       if (error) throw new HttpError(400, error);
     }
     const patch = cleanPatch(body);
+    if (col === 'idps') patch.rev = (existing.rev || 0) + 1;
     validateDocument(col, { ...existing, ...patch });
     const result = db.update(col, id, patch);
     if (!result) throw new HttpError(404, 'Not found');

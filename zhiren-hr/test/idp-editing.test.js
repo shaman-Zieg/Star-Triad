@@ -81,13 +81,15 @@ test('an employee has at most one active development plan', async () => {
 
 test('saving from a stale copy is refused instead of overwriting newer changes', async () => {
   const [plan] = plans();
-  const stale = '2000-01-01 00:00:00';
-  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { period: 'stale', expectedUpdatedAt: stale })).status, 409);
-  assert.notEqual(db.get('idps', plan.id).period, 'stale');
-  const current = db.get('idps', plan.id).updatedAt;
-  const saved = await call('PUT', `/api/idps/${plan.id}`, { period: 'fresh', expectedUpdatedAt: current });
-  assert.equal(saved.status, 200);
-  assert.equal(saved.data.expectedUpdatedAt, undefined, 'the check is not stored on the plan');
+  const loaded = db.get('idps', plan.id).rev || 0;
+  // Both saves land within the same second, which is what a timestamp check would miss.
+  const first = await call('PUT', `/api/idps/${plan.id}`, { period: 'first', expectedRev: loaded });
+  assert.equal(first.status, 200);
+  assert.equal(first.data.rev, loaded + 1);
+  assert.equal(first.data.expectedRev, undefined, 'the check is not stored on the plan');
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { period: 'stale', expectedRev: loaded })).status, 409);
+  assert.equal(db.get('idps', plan.id).period, 'first');
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { rev: 0, period: 'forged' })).data.rev, loaded + 2, 'clients cannot set the counter');
 });
 
 test('the activity feed names the employee whose plan changed', async () => {
