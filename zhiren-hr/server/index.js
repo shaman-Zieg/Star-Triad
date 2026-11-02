@@ -104,6 +104,8 @@ function validateResponse(body) {
   return out;
 }
 
+const hasActivePlan = (employeeId, exceptId) => db.list('idps', { employeeId }).some(p => p.mode !== 'retention' && p.status === 'active' && p.id !== exceptId);
+
 function changeDetail(before, after) {
   for (const field of ['stage', 'status']) {
     if (before[field] !== undefined && before[field] !== after[field]) return { field, from: before[field], to: after[field] };
@@ -208,6 +210,11 @@ async function handleApi(req, res, url, auth) {
         if (db.list('idps', { employeeId: employee.id }).some(p => p.mode === 'retention' && p.status === 'active')) throw new HttpError(409, 'An active retention plan already exists.');
         data = plan;
       }
+      if (col === 'idps' && data.mode !== 'retention') {
+        const employee = db.get('employees', String(data.employeeId || ''));
+        if (employee?.status === 'left') throw new HttpError(400, 'Development plans require an active employee.');
+        if (employee && data.status === 'active' && hasActivePlan(employee.id)) throw new HttpError(409, 'This employee already has an active development plan.');
+      }
       if (col === 'succession') {
         const error = successionNominationError(data, null, (employeeId) => db.get('employees', employeeId), db.stamp().slice(0, 10));
         if (error) throw new HttpError(400, error);
@@ -242,6 +249,8 @@ async function handleApi(req, res, url, auth) {
         for (const key of ['baseline', 'startedAt', 'reviewDue']) delete body[key];
       } else if ((body.employeeId && body.employeeId !== previous.employeeId) || (body.mode && body.mode !== previous.mode)) {
         throw new HttpError(400, 'A development plan cannot be moved to another employee or plan type.');
+      } else if (previous.mode !== 'retention' && body.status === 'active' && previous.status !== 'active' && hasActivePlan(previous.employeeId, id)) {
+        throw new HttpError(409, 'This employee already has an active development plan.');
       }
     }
     if (col === 'succession') {

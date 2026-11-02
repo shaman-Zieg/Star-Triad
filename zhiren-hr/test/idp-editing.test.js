@@ -64,3 +64,17 @@ test('a development plan cannot be moved to someone else or another type', async
   assert.equal((await call('PUT', `/api/idps/${plan.id}`, { mode: 'growth' })).status, 400);
   assert.equal(db.get('idps', plan.id).employeeId, plan.employeeId);
 });
+
+test('an employee has at most one active development plan', async () => {
+  const [plan] = plans();
+  const body = { employeeId: plan.employeeId, status: 'active', mode: 'gap', focus: [area] };
+  assert.equal((await call('POST', '/api/idps', body)).status, 409);
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { status: 'completed' })).status, 200);
+  const next = await call('POST', '/api/idps', body);
+  assert.equal(next.status, 201, 'a finished plan no longer blocks a new one');
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { status: 'active' })).status, 409, 'nor can it be reopened alongside the new one');
+  assert.equal((await call('DELETE', `/api/idps/${next.data.id}`, {})).status, 200);
+  assert.equal((await call('PUT', `/api/idps/${plan.id}`, { status: 'active' })).status, 200);
+  const left = db.list('employees').find((e) => e.status === 'left');
+  assert.equal((await call('POST', '/api/idps', { ...body, employeeId: left.id })).status, 400);
+});
