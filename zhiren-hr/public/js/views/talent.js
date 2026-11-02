@@ -40,7 +40,7 @@ export default async function talent(el, ctx) {
   await ({ ninebox: nineboxView, competency: competencyView, succession: successionView, risk: riskView })[sub](body, ctx, d);
 }
 
-const deptOptions = (d, value) => html`<select class="input" id="dept" style="width:auto" aria-label="${L('部门', 'Department')}"><option value="">${hasRole('hr') ? L('全公司', 'Whole company') : L('可访问范围', 'Accessible scope')}</option>${d.departments.filter(x => hasRole('hr') || d.employees.some(e => e.deptId === x.id)).map((x) => html`<option value="${x.id}" ${x.id === value ? 'selected' : ''}>${loc(x)}</option>`)}</select>`;
+const deptOptions = (d, value) => html`<select class="w-auto input" id="dept" aria-label="${L('部门', 'Department')}"><option value="">${hasRole('hr') ? L('全公司', 'Whole company') : L('可访问范围', 'Accessible scope')}</option>${d.departments.filter(x => hasRole('hr') || d.employees.some(e => e.deptId === x.id)).map((x) => html`<option value="${x.id}" ${x.id === value ? 'selected' : ''}>${loc(x)}</option>`)}</select>`;
 const deptMap = (d) => Object.fromEntries(d.departments.map((x) => [x.id, x]));
 
 // ------------------------------------------------------------------ shared: individual insight
@@ -70,9 +70,9 @@ function ratingForm(emp, onSaved) {
   modal({
     title: L(`调整评级 · ${personName(emp)}`, `Adjust ratings · ${personName(emp)}`),
     body: html`
-      <div class="q-block"><p>${L('绩效（最近一期）', 'Performance (latest cycle)')}</p>${likert('performance', emp.performance)}<div class="small muted" style="margin-top:6px">${Object.entries(PERF_SCALE).map(([k, v]) => `${k} ${tx(v)}`).join(' · ')}</div></div>
-      <div class="q-block"><p>${L('潜力', 'Potential')}</p>${likert('potential', emp.potential, { max: 3 })}<div class="small muted" style="margin-top:6px">${Object.entries(POT_SCALE).map(([k, v]) => `${k} ${tx(v)}`).join(' · ')}</div></div>
-      <p class="small" style="margin-top:10px"><a href="#" data-agility>${L('不确定潜力？使用学习敏锐度问卷评估 →', 'Unsure about potential? Use the learning agility questionnaire →')}</a></p>`,
+      <div class="q-block"><p>${L('绩效（最近一期）', 'Performance (latest cycle)')}</p>${likert('performance', emp.performance)}<div class="mt-2 small muted">${Object.entries(PERF_SCALE).map(([k, v]) => `${k} ${tx(v)}`).join(' · ')}</div></div>
+      <div class="q-block"><p>${L('潜力', 'Potential')}</p>${likert('potential', emp.potential, { max: 3 })}<div class="mt-2 small muted">${Object.entries(POT_SCALE).map(([k, v]) => `${k} ${tx(v)}`).join(' · ')}</div></div>
+      <p class="mt-3 small"><a href="#" data-agility>${L('不确定潜力？使用学习敏锐度问卷评估 →', 'Unsure about potential? Use the learning agility questionnaire →')}</a></p>`,
     onOpen: (form, { close }) => {
       form.querySelector('[data-agility]').addEventListener('click', (e) => {
         e.preventDefault();
@@ -95,7 +95,7 @@ function agilityForm(emp, onSaved) {
     title: L(`潜力评估 · ${personName(emp)}`, `Potential assessment · ${personName(emp)}`),
     wide: true,
     body: html`${method(L('学习敏锐度：', 'Learning agility:'), L('潜力的最佳预测指标之一——在全新情境中快速学习并取得成果的能力。请由直属上级基于近一年的观察评分（1 很少如此，5 总是如此）。', 'One of the best predictors of potential: learning fast and delivering in new situations. The manager rates observations from the past year (1 rarely, 5 always).'))}
-      ${AGILITY.map((dim) => html`<div class="section-title">${tx(dim.name)}</div>${dim.items.map((it, i) => html`<div class="q-block" style="padding:8px 0"><p style="font-weight:400">${tx(it)}</p>${likert(`${dim.key}${i}`)}</div>`)}`)}`,
+      ${AGILITY.map((dim) => html`<div class="section-title">${tx(dim.name)}</div>${dim.items.map((it, i) => html`<div class="py-2 q-block"><p class="fw-normal">${tx(it)}</p>${likert(`${dim.key}${i}`)}</div>`)}`)}`,
     submitLabel: L('计算并保存潜力', 'Calculate and save'),
     onSubmit: async (v) => {
       const r = potentialFromAgility(v);
@@ -128,10 +128,10 @@ async function nineboxView(el, ctx, d) {
   };
 
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="row">${deptOptions(d, dept)}<span class="small muted">${L(`${dist.n} 人已评估 · ${dist.unassessed} 人待评估 · 比例仅按已评估人员计算`, `${dist.n} assessed · ${dist.unassessed} awaiting assessment · percentages use assessed people only`)}</span></div>
     </div>
-    ${unassessed.length ? html`<section class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>${L('待评估员工', 'Awaiting assessment')}</h2><p>${L('绩效或潜力未完成，不纳入九宫格。点击员工查看资料并完成评分。', 'Missing performance or potential ratings; excluded from the grid. Select someone to review and complete their ratings.')}</p></div></div><div class="box-people">${unassessed.map(emp => html`<button class="pchip" type="button" data-emp="${emp.id}">${avatar(emp, 'xs')}<span>${personName(emp)}</span></button>`)}</div></section>` : ''}
+    ${unassessed.length ? html`<section class="mb-4 card"><div class="card-head"><div><h2>${L('待评估员工', 'Awaiting assessment')}</h2><p>${L('绩效或潜力未完成，不纳入九宫格。点击员工查看资料并完成评分。', 'Missing performance or potential ratings; excluded from the grid. Select someone to review and complete their ratings.')}</p></div></div><div class="box-people">${unassessed.map(emp => html`<button class="pchip" type="button" data-emp="${emp.id}">${avatar(emp, 'xs')}<span>${personName(emp)}</span></button>`)}</div></section>` : ''}
     <div class="split">
       <section class="card">
         <div class="ninebox-wrap">
@@ -148,7 +148,7 @@ async function nineboxView(el, ctx, d) {
         </section>
       </div>
     </div>
-    <div id="ai-talent" style="margin-top:16px"></div>`);
+    <div id="ai-talent" class="mt-4"></div>`);
 
   const showDetail = (emp) => {
     if (!emp) return;
@@ -157,13 +157,13 @@ async function nineboxView(el, ctx, d) {
     const b = BOXES[boxKey(emp.performance, emp.potential)];
     const ins = personalInsight(emp, d.insightCtx);
     setHTML(el.querySelector('#detail'), html`
-      <div class="row" style="margin-bottom:10px">${avatar(emp, 'md')}<div><a href="#/service/people/${emp.id}"><strong>${personName(emp)}</strong></a><div class="small muted">${loc(emp, 'title')} · ${deptName(emp.deptId)} · ${emp.level}</div></div></div>
-      <div class="row" style="margin-bottom:10px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('未评估', 'Unassessed'), 'info')}${badge(`${L('绩效', 'Perf')} ${isPerformanceRating(emp.performance) ? `${emp.performance} · ${tx(PERF_SCALE[emp.performance])}` : L('未评估', 'Unassessed')}`)}${badge(`${L('潜力', 'Pot')} ${isPotentialRating(emp.potential) ? emp.potential : L('未评估', 'Unassessed')}`)}${ins.risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[ins.risk.level][0])}`, RISK_LEVEL[ins.risk.level][1]) : ''}</div>
+      <div class="mb-3 row">${avatar(emp, 'md')}<div><a href="#/service/people/${emp.id}"><strong>${personName(emp)}</strong></a><div class="small muted">${loc(emp, 'title')} · ${deptName(emp.deptId)} · ${emp.level}</div></div></div>
+      <div class="mb-3 row">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('未评估', 'Unassessed'), 'info')}${badge(`${L('绩效', 'Perf')} ${isPerformanceRating(emp.performance) ? `${emp.performance} · ${tx(PERF_SCALE[emp.performance])}` : L('未评估', 'Unassessed')}`)}${badge(`${L('潜力', 'Pot')} ${isPotentialRating(emp.potential) ? emp.potential : L('未评估', 'Unassessed')}`)}${ins.risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[ins.risk.level][0])}`, RISK_LEVEL[ins.risk.level][1]) : ''}</div>
       <div class="personal-summary"><div class="insight-title">${L('综合评语', 'Overall assessment')}</div><p>${tx(ins.summary)}</p></div>
       <div class="section-title">${L('个人解读（规则引擎，基于本人数据）', 'Individual insight (rule engine, from their own data)')}</div>
       ${insightBlock(ins)}
-      ${b ? html`<details class="small" style="margin-top:8px"><summary class="muted">${L('该格子的通用做法', 'General practice for this box')}</summary><ul style="margin:6px 0 0;padding-left:18px">${b.actions.map((a) => html`<li>${tx(a)}</li>`)}</ul></details>` : ''}
-      <div class="row" style="margin-top:12px">${hasRole('hr') || emp.id !== getActor() ? html`<button class="btn btn-sm" type="button" data-rate>${icon('edit')}${L('调整评级', 'Adjust ratings')}</button>` : ''}<a class="btn btn-sm" href="#/talent/competency?emp=${emp.id}">${L('能力画像', 'Competencies')}</a><a class="btn btn-sm" href="#/learning/idp?emp=${emp.id}">${L('发展计划', 'IDP')}</a></div>`);
+      ${b ? html`<details class="mt-2 small"><summary class="muted">${L('该格子的通用做法', 'General practice for this box')}</summary><ul class="list-plain-top">${b.actions.map((a) => html`<li>${tx(a)}</li>`)}</ul></details>` : ''}
+      <div class="mt-3 row">${hasRole('hr') || emp.id !== getActor() ? html`<button class="btn btn-sm" type="button" data-rate>${icon('edit')}${L('调整评级', 'Adjust ratings')}</button>` : ''}<a class="btn btn-sm" href="#/talent/competency?emp=${emp.id}">${L('能力画像', 'Competencies')}</a><a class="btn btn-sm" href="#/learning/idp?emp=${emp.id}">${L('发展计划', 'IDP')}</a></div>`);
   };
   on(el, 'click', '.pchip', (e, c) => showDetail(people.find((x) => x.id === c.dataset.emp)));
   on(el, 'keydown', '.pchip', (e, c) => { if (e.key === 'Enter') showDetail(people.find((x) => x.id === c.dataset.emp)); });
@@ -234,8 +234,8 @@ function competencyForm(emp, onSaved) {
     title: L(`能力评估 · ${personName(emp)}`, `Competency assessment · ${personName(emp)}`),
     wide: true,
     body: html`${method(L('评估方法：', 'Method:'), L('对照行为锚点，基于过去 6-12 个月的具体事例评分。建议上级评估后与员工沟通确认。', 'Rate against the behavioral anchors using examples from the past 6-12 months, then discuss with the employee.'))}
-      ${COMPETENCIES.map((c) => html`<div class="q-block"><p>${tx(c.name)} <span class="small muted" style="font-weight:400">— ${tx(c.def)}</span></p>${likert(c.key, emp.competencies?.[c.key])}
-        <div class="small muted" style="margin-top:6px">1：${tx(c.anchors[1])}　3：${tx(c.anchors[3])}　5：${tx(c.anchors[5])}</div></div>`)}`,
+      ${COMPETENCIES.map((c) => html`<div class="q-block"><p>${tx(c.name)} <span class="fw-normal small muted">— ${tx(c.def)}</span></p>${likert(c.key, emp.competencies?.[c.key])}
+        <div class="mt-2 small muted">1：${tx(c.anchors[1])}　3：${tx(c.anchors[3])}　5：${tx(c.anchors[5])}</div></div>`)}`,
     onSubmit: async (v) => {
       const missing = COMP_KEYS.filter((k) => !v[k]);
       if (missing.length) throw new Error(L(`还有 ${missing.length} 项未评分`, `${missing.length} competencies are not rated yet`));
@@ -273,8 +273,8 @@ async function competencyView(el, ctx, d) {
   const ex = emp ? levelExplainer(emp, a) : null;
   const fitTone = !a || a.fit == null ? 'info' : a.verdict === 'full' ? 'ok' : a.fit < 85 ? 'danger' : 'warn';
   setHTML(el, html`
-    <div class="row" style="margin-bottom:12px">${deptOptions(d, dept)}
-      <select class="input" id="emp" style="width:auto" aria-label="${L('员工', 'Employee')}">${team.map((e) => html`<option value="${e.id}" ${e.id === emp?.id ? 'selected' : ''}>${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>
+    <div class="mb-3 row">${deptOptions(d, dept)}
+      <select class="w-auto input" id="emp" aria-label="${L('员工', 'Employee')}">${team.map((e) => html`<option value="${e.id}" ${e.id === emp?.id ? 'selected' : ''}>${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>
     ${emp ? html`<div class="split">
       <section class="card">
         <div class="card-head"><div><h2>${L('能力画像', 'Competency profile')} · ${personName(emp)}</h2><p>${loc(emp, 'title')} · ${ex.band}</p></div>
@@ -296,7 +296,7 @@ async function competencyView(el, ctx, d) {
         </section>
       </div>
     </div>` : empty(L('没有员工', 'No employees'), '', 'users')}
-    <section class="card" style="margin-top:16px">
+    <section class="mt-4 card">
       <div class="card-head"><div><h2>${L('团队能力差距矩阵', 'Team gap matrix')}</h2><p>${L('数值 = 目标要求 − 当前水平（0 表示达标，颜色越深差距越大；“—”表示未评估）', 'Value = target − current (0 means on target; darker means a bigger gap; "—" means not rated)')}</p></div></div>
       ${heatmap({
         rows: team.slice(0, 40).map((e) => ({ label: `${personName(e)} · ${e.level}`, note: L('未评估', 'Not rated'), cells: Object.fromEntries(COMP_KEYS.map((k) => [k, Number.isInteger(Number(e.competencies?.[k])) && e.competencies?.[k] ? Math.max(0, targetProfile(e.level)[k] - e.competencies[k]) : null])) })),
@@ -325,7 +325,7 @@ function specForm(ev, d, onSaved) {
     title: L(`岗位要求 · ${loc(ev.plan, 'title')}`, `Role requirements · ${loc(ev.plan, 'title')}`),
     wide: true,
     body: html`${method(L('说明：', 'Note:'), L('继任者按“目标岗位”的职能、职级、关键能力和关键技能评估，而不仅是现任者的职级。默认值来自现任者的职位与技能，可按岗位实际调整。', 'Successors are measured against the target role: its function, level, critical competencies and key skills, not just the incumbent\'s grade. Defaults come from the incumbent\'s title and skills; adjust them to the real role.'))}
-      <div class="form-grid" style="margin-top:12px">
+      <div class="mt-3 form-grid">
         ${field(L('职能', 'Function'), select('family', Object.entries(FAMILIES).map(([k, f]) => [k, tx(f.name)]), { value: s.family }))}
         ${field(L('职级', 'Level'), select('level', LEVELS.map((l) => [l, l]), { value: s.level }))}
         ${field(L('关键能力（权重加倍）', 'Critical competencies (double weight)'), chipSelect('critical', COMPETENCIES.map((c) => [c.key, tx(c.name)]), s.critical), { span: true, group: true })}
@@ -352,8 +352,8 @@ function nominateForm(ev, d, onSaved, presetId) {
       ${callout('info', L('高流失风险人员已从提名名单中排除；风险降低后可重新评估。', 'High-flight-risk employees are excluded from nominations; reassess once their risk falls.'))}
       ${ev.suggestions.length ? html`<div class="section-title">${L('系统建议（已通过全部资格检查，按综合分排序）', 'Suggested (passed every check, ranked by score)')}</div>
         ${ev.suggestions.map((x) => html`<label class="list-item check"><input type="radio" name="employeeId" value="${x.employee.id}" ${x.employee.id === presetId ? 'checked' : ''}><span class="grow">${personName(x.employee)} <span class="small muted">${loc(x.employee, 'title')} · ${x.employee.level} · ${L('能力匹配', 'fit')} ${x.fit}% · ${tx(READINESS[x.readiness].name)}</span></span>${scoreBar(x)}</label>`)}` : callout('info', L('没有人通过全部资格检查。可以手动提名，但系统会显示其资格状态。', 'Nobody passes every check. You can still nominate someone; their eligibility status will be shown.'))}
-      ${ev.heldBack.length ? html`<p class="small muted" style="margin-top:8px">${L('因高流失风险未推荐：', 'Not suggested because of high flight risk: ')}${ev.heldBack.map((x) => personName(x.employee)).join('、')}</p>` : ''}
-      <div class="form-grid" style="margin-top:12px">
+      ${ev.heldBack.length ? html`<p class="mt-2 small muted">${L('因高流失风险未推荐：', 'Not suggested because of high flight risk: ')}${ev.heldBack.map((x) => personName(x.employee)).join('、')}</p>` : ''}
+      <div class="mt-3 form-grid">
         ${field(L('或选择其他员工', 'Or pick someone else'), select('other', options.map((e) => [e.id, `${personName(e)} · ${loc(e, 'title')} · ${e.level}`]), { placeholder: '—', value: ev.suggestions.some((x) => x.employee.id === presetId) ? '' : presetId }))}
         ${field(L('上级判断的准备度', 'Readiness (manager judgment)'), select('readiness', Object.entries(READINESS).map(([k, r]) => [k, tx(r.name)]), { value: 'y1' }))}
         ${field(L('跨职能依据（候选人与岗位职能不同时必填）', 'Cross-functional evidence (required when functions differ)'), textarea('evidence', { rows: 2, placeholder: L('例如：曾负责产品线 2 年，主导过 3 个产品版本上线', 'e.g. ran a product line for 2 years and shipped 3 releases') }), { span: true })}
@@ -366,7 +366,7 @@ function nominateForm(ev, d, onSaved, presetId) {
         const emp = d.employees.find((e) => e.id === id);
         if (!emp) return setHTML(form.querySelector('#nominee-check'), '');
         const r = evaluateCandidate(emp, { spec: ev.spec, today: d.today, departments: deps, nomination: { evidence: form.evidence.value } });
-        setHTML(form.querySelector('#nominee-check'), html`<div style="margin-top:10px">${statusBadge(r.status)} ${r.reasons.map((x) => html`<div class="small">${tx(x)}</div>`)}${r.status === 'eligible' ? html`<div class="small">${L(`综合分 ${r.score}，能力匹配 ${r.fit}%`, `Score ${r.score}, fit ${r.fit}%`)}</div>` : ''}</div>`);
+        setHTML(form.querySelector('#nominee-check'), html`<div class="mt-3">${statusBadge(r.status)} ${r.reasons.map((x) => html`<div class="small">${tx(x)}</div>`)}${r.status === 'eligible' ? html`<div class="small">${L(`综合分 ${r.score}，能力匹配 ${r.fit}%`, `Score ${r.score}, fit ${r.fit}%`)}</div>` : ''}</div>`);
       };
       form.addEventListener('change', check);
       form.addEventListener('input', check);
@@ -393,7 +393,7 @@ export function keyRoleForm(d, onSaved, presetEmployeeId) {
     title: L('评估是否列为关键岗位', 'Assess whether this is a key role'),
     wide: true,
     body: html`${method(L('关键岗位不限于管理岗：', 'Key roles are not only management roles:'), L('对业务影响大、技能稀缺、替代周期长或存在单点依赖的岗位都应纳入继任规划。高流失风险本身不是列为关键岗位的理由——需要基于岗位本身判断。', 'Include roles with big business impact, scarce skills, long replacement time or a single point of failure. High flight risk alone is not a reason: judge the role itself.'))}
-      <div class="form-grid" style="margin-top:12px">
+      <div class="mt-3 form-grid">
         ${field(L('岗位（按现任者选择）', 'Role (by incumbent)'), select('incumbentId', candidates.map((e) => [e.id, `${loc(e, 'title')} · ${personName(e)} · ${e.level}`]), { value: presetEmployeeId }), { span: true })}
         ${field(L('关键原因（至少一项）', 'Why it is key (at least one)'), chipSelect('reasons', Object.entries(KEY_ROLE_REASONS).map(([k, r]) => [k, tx(r)]), []), { span: true, group: true })}
         ${field(L('补充说明', 'Notes'), textarea('note', { rows: 2 }), { span: true })}
@@ -420,7 +420,7 @@ function successorPreview(emp, d) {
     <div class="card-head"><div><h2>${personName(emp)} · ${L('对应继任者', 'Successors for this role')}</h2><p>${loc(emp, 'title')} · ${emp.level} · ${L('候选预览', 'Candidate preview')}</p></div>${badge(L('尚未建立正式计划', 'No formal plan yet'), 'warn')}</div>
     ${callout('info', L('按本人岗位要求筛选可考察人选，已排除现任者及所有高流失风险人员。以下为系统建议，尚未计入正式继任覆盖。', 'Candidates are screened against this person’s role, excluding the incumbent and all high-flight-risk employees. These suggestions do not yet count as formal succession coverage.'))}
     ${preview.suggestions.length ? html`<div class="section-title">${L('建议考察顺序', 'Suggested review order')}</div>${preview.suggestions.map((n, i) => html`<div class="cand-row"><span class="candidate-priority">${i + 1}</span><div class="grow">${personLink(n.employee, `${loc(n.employee, 'title')} · ${n.employee.level}`)}<div class="small">${i === 0 ? badge(L('优先考察', 'Review first'), 'ok') : ''} ${L('能力匹配', 'Fit')} ${n.fit}% · ${L('绩效', 'Performance')} ${n.employee.performance}/5 · ${L('流失风险', 'Flight risk')} ${n.risk ? tx(RISK_LEVEL[n.risk.level][0]) : L('未知', 'Unknown')}</div></div><div class="cand-score">${scoreBar(n)}</div></div>`)}` : callout('danger', L('暂未找到通过全部条件的内部候选。建议补充能力评估、开展定向培养或建立外部人才储备。', 'No internal candidates currently pass every check. Complete assessments, develop a pipeline, or consider external candidates.'))}
-    <button class="btn btn-primary btn-sm" type="button" data-keyrole="${emp.id}" style="margin-top:12px">${L('评估并建立正式继任计划', 'Assess and create a formal plan')}</button>
+    <button class="mt-3 btn btn-primary btn-sm" type="button" data-keyrole="${emp.id}">${L('评估并建立正式继任计划', 'Assess and create a formal plan')}</button>
   </section>`;
 }
 
@@ -442,8 +442,8 @@ async function successionView(el, ctx, d) {
         <div class="row">${badge(tx(CRITICALITY[p.plan.criticality]?.name || [p.plan.criticality, p.plan.criticality]), CRITICALITY[p.plan.criticality]?.tone)}<span class="badge badge-${COVERAGE[p.coverage].tone}">${icon(p.coverage === 'weak' ? 'alert' : 'check')}${tx(COVERAGE[p.coverage].name)}</span></div></div>
       <p class="small muted" data-tip="${L('继任风险分', 'Succession risk score')} ${p.urgency}">${L('排序依据：', 'Ranked by: ')}${p.urgencyParts.map((x) => tx(x.label)).join(' · ')} = ${p.urgency}</p>
       <div class="row-between"><div>${personLink(p.incumbent, L('现任', 'Incumbent'))}</div><div class="small muted">${p.incumbentRisk ? html`${L('现任者流失风险', 'Incumbent flight risk')} ${badge(tx(RISK_LEVEL[p.incumbentRisk.level][0]), RISK_LEVEL[p.incumbentRisk.level][1])}` : ''}${p.plan.vacancyRisk === 'high' ? html` ${badge(L('空缺风险高', 'Vacancy risk high'), 'danger')}` : ''}</div></div>
-      ${p.plan.note ? html`<p class="small muted" style="margin-top:8px">${loc(p.plan, 'note')}</p>` : ''}
-      <div class="spec small"><span>${L('岗位要求：', 'Requirements: ')}<strong>${familyName(s.family, lang())}</strong> · ${s.level} · ${L('关键能力', 'critical')} ${s.critical.map((k) => tx(compByKey[k].name)).join('、')}${s.skills.length ? ` · ${L('关键技能', 'key skills')} ${s.skills.map((k) => skillLabel(k, lang())).join('、')}` : ''}${s.custom ? '' : L('（默认）', ' (default)')}</span><button class="btn btn-sm btn-ghost" type="button" data-spec="${p.plan.id}">${icon('edit')}</button></div>
+      ${p.plan.note ? html`<p class="mt-2 small muted">${loc(p.plan, 'note')}</p>` : ''}
+      <div class="spec small"><span>${L('岗位要求：', 'Requirements: ')}<strong>${familyName(s.family, lang())}</strong> · ${s.level} · ${L('关键能力', 'critical')} ${s.critical.map((k) => tx(compByKey[k].name)).join('、')}${s.skills.length ? ` · ${L('关键技能', 'key skills')} ${s.skills.map((k) => skillLabel(k, lang())).join('、')}` : ''}${s.custom ? '' : L('（默认）', ' (default)')}</span><button class="btn btn-sm btn-ghost" type="button" data-spec="${p.plan.id}" aria-label="${L('编辑岗位要求', 'Edit role requirements')}">${icon('edit')}</button></div>
       <div class="section-title">${L(`有效继任候选（${p.eligibleCount} 人）`, `Eligible successors (${p.eligibleCount})`)}</div>
       ${p.preferred ? '' : callout('danger', html`<strong>${L('未找到合适的继任者。', 'No suitable successor identified.')}</strong> ${sorted.length ? L('已提名人选均未通过资格检查或未达适任标准。', 'No nominee passes the checks and the suitability bar.') : L('尚无提名。', 'No nominations yet.')}${p.suggestions.length ? L(` 系统建议可考虑：${p.suggestions.slice(0, 2).map((x) => personName(x.employee)).join('、')}。`, ` Consider: ${p.suggestions.slice(0, 2).map((x) => personName(x.employee)).join(', ')}.`) : L(' 建议启动外部人才储备。', ' Start an external pipeline.')}`)}
       ${sorted.filter((n) => ['preferred', 'eligible'].includes(n.status)).map((n) => html`<div class="cand-row status-${n.status}">
@@ -459,30 +459,30 @@ async function successionView(el, ctx, d) {
         <button class="icon-btn" type="button" data-remove="${p.plan.id}:${n.index}" aria-label="${L('移除提名', 'Remove nomination')}">${icon('x')}</button>
       </div>`)}
       ${sorted.some((n) => !['preferred', 'eligible'].includes(n.status)) ? html`<details class="excluded-nominations small"><summary>${L(`未纳入名单的历史提名（${sorted.filter((n) => !['preferred', 'eligible'].includes(n.status)).length}）`, `Excluded or unqualified nominations (${sorted.filter((n) => !['preferred', 'eligible'].includes(n.status)).length})`)}</summary>${sorted.filter((n) => !['preferred', 'eligible'].includes(n.status)).map((n) => html`<div class="cand-row status-${n.status}"><div class="grow">${personLink(n.employee)}<div>${statusBadge(n.status)} ${L('不参与排名与覆盖计算', 'Not ranked or counted as coverage')}</div><div class="reason">${n.reasons.map((r) => html`<div>${tx(r)}</div>`)}</div></div><button class="icon-btn" type="button" data-remove="${p.plan.id}:${n.index}" aria-label="${L('移除提名', 'Remove nomination')}">${icon('x')}</button></div>`)}</details>` : ''}
-      ${p.suggestions.length ? html`<details class="small" style="margin-top:8px"><summary>${L(`系统建议（${p.suggestions.length} 人，通过全部资格检查）`, `Suggestions (${p.suggestions.length}, pass every check)`)}</summary>
+      ${p.suggestions.length ? html`<details class="mt-2 small"><summary>${L(`系统建议（${p.suggestions.length} 人，通过全部资格检查）`, `Suggestions (${p.suggestions.length}, pass every check)`)}</summary>
         ${p.suggestions.map((x) => html`<div class="cand-row"><div class="grow">${personLink(x.employee, `${loc(x.employee, 'title')} · ${x.employee.level} · ${tx(READINESS[x.readiness].name)}`)}</div><div class="cand-score">${scoreBar(x)}</div><button class="btn btn-sm" type="button" data-nominate="${p.plan.id}" data-emp="${x.employee.id}">${L('提名', 'Nominate')}</button></div>`)}</details>` : ''}
-      ${p.heldBack.length ? html`<p class="small muted" style="margin-top:6px">${icon('alert')} ${L('因高流失风险未推荐：', 'Not suggested because of high flight risk: ')}${p.heldBack.map((x) => html`<a href="#/talent/risk?focus=${x.employee.id}">${personName(x.employee)}</a> `)}</p>` : ''}
-      <button class="btn btn-sm" type="button" data-nominate="${p.plan.id}" style="margin-top:10px">${icon('plus')}${L('提名继任者', 'Nominate')}</button>
+      ${p.heldBack.length ? html`<p class="mt-2 small muted">${icon('alert')} ${L('因高流失风险未推荐：', 'Not suggested because of high flight risk: ')}${p.heldBack.map((x) => html`<a href="#/talent/risk?focus=${x.employee.id}">${personName(x.employee)}</a> `)}</p>` : ''}
+      <button class="mt-3 btn btn-sm" type="button" data-nominate="${p.plan.id}">${icon('plus')}${L('提名继任者', 'Nominate')}</button>
     </section>`;
   };
 
   setHTML(el, html`
-    ${ctx.query.emp ? html`<div class="row-between" style="margin-bottom:12px"><h2>${focusEmp ? personName(focusEmp) : L('员工不存在或已离职', 'Employee unavailable')} · ${L('对应继任者', 'Successors for this role')}</h2><a class="btn btn-sm" href="#/talent/succession">${L('查看全部继任计划', 'All succession plans')}</a></div>` : ''}
+    ${ctx.query.emp ? html`<div class="mb-3 row-between"><h2>${focusEmp ? personName(focusEmp) : L('员工不存在或已离职', 'Employee unavailable')} · ${L('对应继任者', 'Successors for this role')}</h2><a class="btn btn-sm" href="#/talent/succession">${L('查看全部继任计划', 'All succession plans')}</a></div>` : ''}
     ${focusEmp && !plans.length ? successorPreview(focusEmp, d) : ''}
-    <div class="grid cols-4" style="margin-bottom:16px">
+    <div class="mb-4 grid cols-4">
       <div class="card kpi"><span class="label">${L('关键岗位', 'Key roles')}</span><span class="value">${ev.plans.length}</span><span class="sub">${L(`有效覆盖 ${ev.summary.strong + ev.summary.moderate} 个`, `${ev.summary.strong + ev.summary.moderate} effectively covered`)}</span></div>
       ${Object.entries(COVERAGE).map(([k, c]) => html`<div class="card kpi"><span class="label">${badge(tx(c.name), c.tone)}</span><span class="value">${ev.summary[k]}</span><span class="sub">${tx(c.desc)}</span></div>`)}
     </div>
-    ${ev.warnings.length ? html`<div class="callouts" style="margin-bottom:12px">${ev.warnings.map((w) => {
+    ${ev.warnings.length ? html`<div class="mb-3 callouts">${ev.warnings.map((w) => {
       const e = d.employees.find((x) => x.id === w.employeeId);
       return callout('warn', L(`依赖集中：${personName(e)} 是 ${w.nominated.length} 个继任计划的有效候选${w.preferred.length ? `，并在 ${w.preferred.length} 个计划中为首选` : ''}。一人只能接任一个岗位，这些计划的覆盖并不相互独立。`, `Concentration: ${personName(e)} is an eligible candidate in ${w.nominated.length} plans${w.preferred.length ? ` and preferred in ${w.preferred.length}` : ''}. One person can fill only one role, so these plans are not independently covered.`));
     })}</div>` : ''}
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="row"><span class="small muted">${L('排序：', 'Order: ')}</span><div class="seg"><button type="button" class="${order === 'risk' ? 'on' : ''}" data-order="risk">${L('继任风险从高到低', 'Succession risk, highest first')}</button><button type="button" class="${order === 'dept' ? 'on' : ''}" data-order="dept">${L('按部门', 'By department')}</button></div></div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('评估新的关键岗位', 'Assess a new key role')}</button></div>
     <p class="small muted">${order === 'risk' ? L('按岗位继任紧急程度排序：关键程度 × 覆盖缺口 + 现任流失风险 + 空缺风险，分数越高越优先处理。卡片代表关键岗位，同一部门可以有多个岗位。', 'Roles are ordered by succession urgency: criticality × coverage gap + incumbent flight risk + vacancy risk. Higher scores need attention first. Each card is a role; a department may have several.') : L('按组织部门顺序分组，同部门内按继任紧急程度排序。', 'Grouped in organization department order, then by succession urgency within each department.')}</p>
-    <details class="card small" style="margin-bottom:12px"><summary><strong>${L('评估规则', 'How candidates are evaluated')}</strong></summary>
-      <ol style="margin:8px 0 0;padding-left:18px">
+    <details class="mb-3 card small"><summary><strong>${L('评估规则', 'How candidates are evaluated')}</strong></summary>
+      <ol class="list-plain-top">
         <li>${L('资格检查：与目标岗位同职能（跨职能需书面依据或具备岗位关键技能）；职级不高于岗位一级以上、低于岗位不超过', 'Checks: same function as the role (cross-functional needs written evidence or the role\'s key skills); level no more than one step above and at most')} ${MAX_LEVEL_DISTANCE} ${L('级；最近绩效 ≥ 3；能力评估完整；流失风险不为“高”。部门相同不作为合格依据。', 'steps below the role; latest rating ≥ 3; complete competency assessment; flight risk not high. Being in the same department is not evidence.')}</li>
         <li>${L('综合分（满分 100）：', 'Score (out of 100): ')}${Object.entries(WEIGHTS).map(([k, w]) => `${tx(COMPONENT_NAMES[k])} ${w}`).join(' · ')}${L('。能力匹配对照岗位的职级标准，关键能力权重加倍；职级就绪只看职级差，不重复使用能力数据。', '. Fit is measured against the role\'s level standard with critical competencies doubled; level readiness uses only the level distance, so competency data is not counted twice.')}</li>
         <li>${L(`适任标准：能力匹配 ≥ ${SUITABILITY.minFit}% 且综合分 ≥ ${SUITABILITY.minScore}。只有提名人中达标且排名第一者为“首选继任者”；没人达标时显示“未找到合适的继任者”。`, `Suitability bar: fit ≥ ${SUITABILITY.minFit}% and score ≥ ${SUITABILITY.minScore}. Only the top nominee who clears it becomes the preferred successor; otherwise "No suitable successor identified".`)}</li>
@@ -540,25 +540,25 @@ async function riskView(el, ctx, d) {
   };
 
   setHTML(el, html`
-    <div class="grid cols-4" style="margin-bottom:16px">
+    <div class="mb-4 grid cols-4">
       <div class="card kpi"><span class="label">${badge(L('高风险', 'High'), 'danger')}</span><span class="value">${lvl('high')}</span><span class="sub">${L('其中核心人才', 'Key talent among them')} ${all.filter((x) => x.r.level === 'high' && x.r.regrettable).length}</span></div>
       <div class="card kpi"><span class="label">${badge(L('中风险', 'Medium'), 'warn')}</span><span class="value">${lvl('medium')}</span></div>
       <div class="card kpi"><span class="label">${badge(L('低风险', 'Low'), 'ok')}</span><span class="value">${lvl('low')}</span></div>
-      <div class="card"><div class="small muted" style="margin-bottom:6px">${L('高风险人数（按部门）', 'High risk by department')}</div>${byDept.length ? hbars(byDept, { table: false }) : html`<span class="muted small">—</span>`}</div>
+      <div class="card"><div class="mb-2 small muted">${L('高风险人数（按部门）', 'High risk by department')}</div>${byDept.length ? hbars(byDept, { table: false }) : html`<span class="muted small">—</span>`}</div>
     </div>
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="seg">${[['all', L('全部', 'All')], ['high', L('仅高风险', 'High only')], ['regret', L('核心人才', 'Key talent')]].map(([k, n]) => html`<button type="button" class="${filter === k ? 'on' : ''}" data-f="${k}">${n}</button>`)}</div>
       <span class="small muted">${L('风险分 = 司龄、晋升间隔、薪酬竞争力、敬业度、绩效与潜力等因素加总', 'Score adds up tenure, time since promotion, pay position, engagement, performance and potential')}</span>
     </div>
     <section class="card card-flush"><div class="table-wrap"><table class="table risk-table">
       <thead><tr><th>${L('员工', 'Employee')}</th><th>${L('风险分', 'Score')}</th><th>${L('主要因素', 'Main factors')}</th><th>${L('继任关联', 'Succession links')}</th><th>${L('个性化建议（基于本人数据）', 'Personal actions (from their data)')}</th></tr></thead>
       <tbody>${rows.map(({ e, r }) => html`<tr id="risk-${e.id}" class="${ctx.query.focus === e.id ? 'highlight' : ''}">
-        <td>${personLink(e, `${loc(e, 'title')} · ${loc(d.departments.find((x) => x.id === e.deptId))}`)}<div style="margin-top:4px">${badge(tx(RISK_LEVEL[r.level][0]), RISK_LEVEL[r.level][1])}${r.regrettable ? html` ${badge(L('核心', 'Key'), 'info')}` : ''}</div></td>
-        <td style="min-width:110px"><div class="row" style="flex-wrap:nowrap"><span class="num" style="width:26px">${r.score}</span><div style="flex:1">${meter(r.score, 100, r.level === 'high' ? 'danger' : r.level === 'medium' ? 'warn' : 'ok')}</div></div></td>
+        <td>${personLink(e, `${loc(e, 'title')} · ${loc(d.departments.find((x) => x.id === e.deptId))}`)}<div class="mt-1">${badge(tx(RISK_LEVEL[r.level][0]), RISK_LEVEL[r.level][1])}${r.regrettable ? html` ${badge(L('核心', 'Key'), 'info')}` : ''}</div></td>
+        <td style="min-width:110px"><div class="flex-nowrap row"><span class="num" style="width:26px">${r.score}</span><div class="grow">${meter(r.score, 100, r.level === 'high' ? 'danger' : r.level === 'medium' ? 'warn' : 'ok')}</div></div></td>
         <td class="small">${r.factors.slice(0, 3).map((f) => html`<div>${tx(f.text)} <span class="muted">+${f.points}</span></div>`)}</td>
         <td class="small">${linkCell(e, r)}</td>
         <td class="small">${r.level === 'low' ? html`<span class="muted">—</span>` : actionsCell(e)}</td></tr>`)}</tbody></table></div></section>
-    <div style="margin-top:12px">${method(L('使用提示：', 'Note:'), L('所有高风险人员都应在两周内由直属上级完成一对一保留沟通；表中只列出与其本人主要风险因素对应的行动。风险分是对话的起点而非结论。“本岗位继任计划”回答“他离开后谁来接”，“候选”表示他在别人的继任计划中——高风险人员不会被推荐或计入覆盖。', 'Every high-risk person should get a retention one-to-one with their manager within two weeks; the table lists only actions tied to their own main risk factors. The score starts a conversation; it is not a verdict. "Successors for this role" answers who steps in if they leave; "Candidate for" means they appear in someone else\'s plan, where high-risk people are never recommended or counted as coverage.'))}</div>`);
+    <div class="mt-3">${method(L('使用提示：', 'Note:'), L('所有高风险人员都应在两周内由直属上级完成一对一保留沟通；表中只列出与其本人主要风险因素对应的行动。风险分是对话的起点而非结论。“本岗位继任计划”回答“他离开后谁来接”，“候选”表示他在别人的继任计划中——高风险人员不会被推荐或计入覆盖。', 'Every high-risk person should get a retention one-to-one with their manager within two weeks; the table lists only actions tied to their own main risk factors. The score starts a conversation; it is not a verdict. "Successors for this role" answers who steps in if they leave; "Candidate for" means they appear in someone else\'s plan, where high-risk people are never recommended or counted as coverage.'))}</div>`);
   if (ctx.query.focus) setTimeout(() => el.querySelector(`#risk-${CSS.escape(ctx.query.focus)}`)?.scrollIntoView({ block: 'center' }), 50);
   on(el, 'click', '[data-f]', (e, b) => { location.hash = `#/talent/risk?f=${b.dataset.f}`; });
   on(el, 'click', '[data-keyrole]', (e, b) => keyRoleForm(d, (doc) => { location.hash = `#/talent/succession?plan=${doc.id}`; }, b.dataset.keyrole));
