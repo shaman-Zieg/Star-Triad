@@ -240,6 +240,8 @@ async function handleApi(req, res, url, auth) {
       if (previous && (previous.mode === 'retention' || body.mode === 'retention')) {
         if (previous.mode !== 'retention' || (body.mode && body.mode !== 'retention') || (body.employeeId && body.employeeId !== previous.employeeId)) throw new HttpError(400, 'Retention plan type and employee cannot be changed.');
         for (const key of ['baseline', 'startedAt', 'reviewDue']) delete body[key];
+      } else if ((body.employeeId && body.employeeId !== previous.employeeId) || (body.mode && body.mode !== previous.mode)) {
+        throw new HttpError(400, 'A development plan cannot be moved to another employee or plan type.');
       }
     }
     if (col === 'succession') {
