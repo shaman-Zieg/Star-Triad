@@ -3,7 +3,7 @@ import { canEditPlan, idpEditor } from './idp-editor.js';
 // Training & development: 70-20-10 IDPs, training needs analysis, course catalog and program evaluation.
 import {
   html, setHTML, load, api, byId, icon, fmt, today, personName, personLink, avatar, badge, callout, pageHead, tabs, empty,
-  modal, toast, act, field, input, select, on, meter, method, hasRole, getActor,
+  modal, toast, act, field, input, select, on, meter, method, hasRole, getActor, confirmDialog,
 } from '../core.js';
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel, assessCompetencies } from '../engine/competency.js';
@@ -113,7 +113,7 @@ async function idpDetail(el, ctx, d) {
   const ended = idp.status !== 'active';
   setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period} ${badge(tx(IDP_STATUS[idp.status]?.name || [idp.status, idp.status]), IDP_STATUS[idp.status]?.tone)}</div></div></div>
-      <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button></div></div>
+      <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button>${hasRole('hr') ? html`<button class="btn btn-sm no-print" type="button" data-delete-plan aria-label="${L('删除计划', 'Delete plan')}" data-tip="${L('删除计划', 'Delete plan')}">${icon('trash')}</button>` : ''}</div></div>
     ${ended ? callout('info', html`${L('该计划已结束，行动不再计入待办。', 'This plan has ended; its actions no longer appear in task lists.')} ${canEditPlan(idp) ? html`<button class="btn btn-sm no-print" type="button" data-status="active">${L('重新开启', 'Reopen')}</button>` : ''}`) : ''}
     ${!ended && progress === 100 && canEditPlan(idp) ? callout('ok', html`${L('所有行动都已完成。', 'Every action is done.')} <button class="btn btn-sm no-print" type="button" data-status="completed">${icon('check')}${L('标记计划为已完成', 'Mark plan completed')}</button>`) : ''}
     <div class="split" style="margin-top:12px"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true, locked: ended, people: d.employees, ownerId: idp.employeeId })}</div>
@@ -130,6 +130,10 @@ async function idpDetail(el, ctx, d) {
   on(el, 'click', '[data-status]', async (e, b) => {
     await act(b, () => api.put(`/api/idps/${idp.id}`, { status: b.dataset.status }), L('计划状态已更新', 'Plan status updated'));
     ctx.rerender();
+  });
+  on(el, 'click', '[data-delete-plan]', async (e, b) => {
+    const yes = await confirmDialog(L(`删除 ${personName(emp)} 的发展计划？此操作无法撤销；如只是不再执行，可在编辑页将状态改为“已取消”。`, `Delete ${personName(emp)}'s plan? This cannot be undone. To simply stop it, set its status to Cancelled instead.`), { danger: true, confirmLabel: L('删除', 'Delete') });
+    if (yes && await act(b, () => api.del(`/api/idps/${idp.id}`), L('发展计划已删除', 'Plan deleted'))) location.hash = '#/learning/idp';
   });
   on(el, 'click', '[data-print]', () => window.print());
   const g = gaps(emp.competencies, targetProfile(emp.level));
