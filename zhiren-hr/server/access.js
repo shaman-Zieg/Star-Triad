@@ -92,7 +92,7 @@ export function authorizeWrite(col, method, body, previous, user) {
       only(body, method === 'POST' ? ['employeeId', 'period', 'status', 'mode', 'focus', 'name', 'nameEn'] : ['focus', 'actions', 'reviews', 'status', 'period']);
       return body;
     }
-    if (method !== 'PUT' || previous.mode === 'retention') deny();
+    if (method !== 'PUT' || previous.mode === 'retention' || ['completed', 'cancelled'].includes(previous.status)) deny();
     only(body, ['focus']);
     if (!Array.isArray(body.focus) || body.focus.some(f => !f || !Array.isArray(f.actions) || f.actions.some(a => !a || typeof a !== 'object'))) deny();
     const eraseDone = fs => fs?.map(f => ({ ...f, actions: f.actions?.map(a => { const { done, ...rest } = a; return rest; }) }));

@@ -185,3 +185,10 @@ test('managers edit plans of their team but only tick actions on their own', () 
   ticked[0].actions[0].done = true;
   assert.deepEqual(authorizeWrite('idps', 'PUT', { focus: ticked }, own, manager), { focus: ticked });
 });
+
+test('employees cannot change actions once a plan has ended', () => {
+  const focus = [{ competency: 'learning', actions: [{ text: ['Learn', 'Learn'], due: '2026-12-01', done: false }] }];
+  const ticked = structuredClone(focus);
+  ticked[0].actions[0].done = true;
+  for (const status of ['completed', 'cancelled']) assert.throws(() => authorizeWrite('idps', 'PUT', { focus: ticked }, { employeeId: 'e3', mode: 'gap', status, focus }, employee), { status: 403 });
+});
