@@ -64,7 +64,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     </div>
     <div class="section-title">${L('发展行动', 'Actions')}</div>
     ${f.actions.map((a, ai) => actionRow(a, fi, ai))}
-    <div class="row" style="margin-top:10px">${ACTION_ORDER.map((t) => html`<button class="btn btn-sm" type="button" data-add-action="${fi}:${t}">${icon('plus')}${tx(ACTION_TYPES[t])}</button>`)}</div>
+    <div class="mt-3 row">${ACTION_ORDER.map((t) => html`<button class="btn btn-sm" type="button" data-add-action="${fi}:${t}">${icon('plus')}${tx(ACTION_TYPES[t])}</button>`)}</div>
   </section>`;
 
   // The target line follows the draft, so changing a level shows up here straight away.
@@ -84,17 +84,17 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     const errors = checking ? idpDraftErrors(draft) : [];
     const box = el.querySelector('.idp-errors');
     box.hidden = !errors.length;
-    setHTML(box, errors.length ? callout('danger', html`<strong>${L(`还有 ${errors.length} 处需要修改：`, `${errors.length} item(s) to fix:`)}</strong><ul style="margin:4px 0 0;padding-left:18px">${errors.map((x) => html`<li>${tx(x.text)}</li>`)}</ul>`) : '');
+    setHTML(box, errors.length ? callout('danger', html`<strong>${L(`还有 ${errors.length} 处需要修改：`, `${errors.length} item(s) to fix:`)}</strong><ul class="list-plain-top">${errors.map((x) => html`<li>${tx(x.text)}</li>`)}</ul>`) : '');
     const where = new Set(errors.map((x) => x.where));
     el.querySelectorAll('[data-where]').forEach((node) => node.classList.toggle('has-error', where.has(node.dataset.where)));
     return errors;
   };
   const render = () => setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="${cancelHref}" class="small">← ${L('返回', 'Back')}</a><h2 style="font-size:19px">${isNew ? L('新建发展计划', 'New development plan') : L('编辑发展计划', 'Edit development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
+    <div class="mb-3 row-between"><div class="row">${avatar(emp, 'md')}<div><a href="${cancelHref}" class="small">← ${L('返回', 'Back')}</a><h2 class="title-sm">${isNew ? L('新建发展计划', 'New development plan') : L('编辑发展计划', 'Edit development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
       <div class="row"><span class="badge badge-warn" data-dirty ${dirty ? '' : 'hidden'}>${L('未保存', 'Unsaved')}</span><a class="btn" href="${cancelHref}">${L('取消', 'Cancel')}</a><button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div></div>
     ${intro || ''}
     <div class="idp-errors" role="alert" hidden></div>
-    <div class="split" style="margin-top:12px"><div class="stack">
+    <div class="mt-3 split"><div class="stack">
       <section class="card"><div class="card-head"><h2>${L('计划信息', 'Plan details')}</h2></div>
         <div class="form-grid">
           ${field(L('计划周期', 'Period'), input('period', { value: draft.period, maxlength: 80, placeholder: L('如：2026 下半年', 'e.g. H2 2026') }))}

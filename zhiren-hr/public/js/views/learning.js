@@ -30,7 +30,7 @@ export default async function learning(el, ctx) {
   el.appendChild(body);
   if (['idp', 'eval'].includes(sub) && !ctx.id && !ctx.query.emp) {
     const kind = ctx.query.kind === 'retention' ? 'retention' : 'development';
-    setHTML(body, hasRole('hr', 'manager') ? html`<div class="seg" style="margin-bottom:16px"><a class="btn ${kind === 'development' ? 'btn-primary' : ''}" href="#/learning/${sub}">${L('普通发展', 'Development')}</a><a class="btn ${kind === 'retention' ? 'btn-primary' : ''}" href="#/learning/${sub}?kind=retention">${sub === 'eval' ? L('留任评估', 'Retention evaluation') : L('留任干预', 'Retention intervention')}</a></div>` : '');
+    setHTML(body, hasRole('hr', 'manager') ? html`<div class="mb-4 seg"><a class="btn ${kind === 'development' ? 'btn-primary' : ''}" href="#/learning/${sub}">${L('普通发展', 'Development')}</a><a class="btn ${kind === 'retention' ? 'btn-primary' : ''}" href="#/learning/${sub}?kind=retention">${sub === 'eval' ? L('留任评估', 'Retention evaluation') : L('留任干预', 'Retention intervention')}</a></div>` : '');
     const content = document.createElement('div'); body.appendChild(content);
     if (kind === 'retention') return retentionView(content, ctx, d, sub === 'eval');
     return (sub === 'idp' ? idpView : evalView)(content, ctx, { ...d, idps: d.idps.filter(p => p.mode !== 'retention') });
@@ -50,17 +50,17 @@ async function idpView(el, ctx, d) {
   const rank = (i) => (i.status === 'active' ? 0 : 1);
   const plans = [...d.idps].sort((a, b) => rank(a) - rank(b));
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       ${method('70-20-10：', L('70% 来自在岗实践与挑战任务，20% 来自导师、教练与反馈，10% 来自正式培训。', '70% from on-the-job challenges, 20% from mentors, coaching and feedback, 10% from formal training.'))}
-      ${hasRole('hr', 'manager') ? html`<div class="row"><select class="input" id="new-emp" style="width:auto" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id) && canEditPlan({ employeeId: e.id })).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>` : ''}
+      ${hasRole('hr', 'manager') ? html`<div class="row"><select class="w-auto input" id="new-emp" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id) && canEditPlan({ employeeId: e.id })).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>` : ''}
     </div>
     <section class="card card-flush">
       ${d.idps.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('员工', 'Employee')}</th><th>${L('发展重点', 'Focus areas')}</th><th>${L('类型', 'Type')}</th><th>${L('状态', 'Status')}</th><th>${L('进度', 'Progress')}</th><th>${L('创建', 'Created')}</th><th></th></tr></thead>
-        <tbody>${plans.map((i) => html`<tr class="clickable" data-href="#/learning/idp/${i.id}"><td>${personLink(emp[i.employeeId])}</td>
+        <tbody>${plans.map((i) => html`<tr class="clickable" tabindex="0" data-href="#/learning/idp/${i.id}"><td>${personLink(emp[i.employeeId])}</td>
           <td>${(i.focus || []).map((f) => html`<span class="tag">${tx(compByKey[f.competency].name)}</span>`)}</td>
           <td>${badge(i.mode === 'growth' ? L('晋升准备', 'Next level') : i.mode === 'mastery' ? L('精进', 'Mastery') : L('补齐差距', 'Close gaps'), i.mode === 'gap' ? 'warn' : 'info')}</td>
           <td>${badge(tx(IDP_STATUS[i.status]?.name || [i.status, i.status]), IDP_STATUS[i.status]?.tone)}</td>
-          <td style="min-width:140px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${meter(idpProgress(i), 100, 'ok')}</div><span class="small num">${idpProgress(i)}%</span></div></td>
+          <td class="min-w-140"><div class="flex-nowrap row"><div class="grow">${meter(idpProgress(i), 100, 'ok')}</div><span class="small num">${idpProgress(i)}%</span></div></td>
           <td class="small">${fmt.date(i.createdAt)}</td>
           <td>${canEditPlan(i) ? html`<a class="btn btn-sm" href="#/learning/idp/${i.id}?edit=1">${icon('edit')}${L('编辑', 'Edit')}</a>` : ''}</td></tr>`)}</tbody></table></div>` : empty(L('还没有发展计划', 'No development plans yet'), L('从右上角选择员工，系统将根据能力差距自动生成。', 'Pick an employee above; the plan is generated from their competency gaps.'), 'target')}
     </section>`);
@@ -74,7 +74,7 @@ function planBlocks(focus, courses, { editable = false, locked = false, people =
     <p class="small"><strong>${L('SMART 目标：', 'SMART goal: ')}</strong>${f.goal ? tx(f.goal) : L(`在 6 个月内将「${tx(compByKey[f.competency].name)}」提升到 ${f.target} 级，表现为：${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`, `Within 6 months, reach level ${f.target} in ${tx(compByKey[f.competency].name)}, shown by: ${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`)}</p>
     ${f.actions.map((a, ai) => html`<div class="list-item">
       ${editable ? html`<input type="checkbox" data-toggle="${fi}:${ai}" ${a.done ? 'checked' : ''} ${locked ? 'disabled' : ''} aria-label="${L('完成', 'Done')}">` : ''}
-      <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(ACTION_TYPES[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}${a.ownerId && a.ownerId !== ownerId ? ` · ${L('负责人', 'Owner')} ${personName(people.find((p) => p.id === a.ownerId))}` : ''}</div></div>
+      <div class="grow"><div class="${a.done ? 'done-text' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(ACTION_TYPES[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}${a.ownerId && a.ownerId !== ownerId ? ` · ${L('负责人', 'Owner')} ${personName(people.find((p) => p.id === a.ownerId))}` : ''}</div></div>
       ${badge(a.type === '70' ? '70' : a.type === '20' ? '20' : '10', a.type === '70' ? 'brand' : '')}</div>`)}
   </section>`);
 }
@@ -87,14 +87,14 @@ async function idpNew(el, ctx, d) {
   const current = activeDevelopmentPlan(d.idps, emp.id);
   if (current) {
     return setHTML(el, html`<a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a>
-      <section class="card" style="margin-top:8px">${callout('info', L(`${personName(emp)} 已有一份进行中的发展计划，可以直接在原计划上修改。`, `${personName(emp)} already has an active plan; change that one instead.`))}
-        <div class="row" style="margin-top:12px"><a class="btn btn-primary" href="#/learning/idp/${current.id}">${L('查看计划', 'Open plan')}</a><a class="btn" href="#/learning/idp/${current.id}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a></div></section>`);
+      <section class="mt-2 card">${callout('info', L(`${personName(emp)} 已有一份进行中的发展计划，可以直接在原计划上修改。`, `${personName(emp)} already has an active plan; change that one instead.`))}
+        <div class="mt-3 row"><a class="btn btn-primary" href="#/learning/idp/${current.id}">${L('查看计划', 'Open plan')}</a><a class="btn" href="#/learning/idp/${current.id}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a></div></section>`);
   }
   const plan = buildIDP(emp, d.courses, today());
   if (plan.mode === 'unassessed') {
     return setHTML(el, html`<a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a>
-      <section class="card" style="margin-top:8px">${callout('info', L(`${personName(emp)} 还没有完整的能力评估。发展计划要基于真实的能力差距，请先完成评估。`, `${personName(emp)} has no complete competency assessment. A development plan needs real gaps, so assess first.`))}
-        <a class="btn btn-primary" style="margin-top:12px" href="#/talent/competency?emp=${emp.id}">${L('去完成能力评估', 'Assess competencies')}</a></section>`);
+      <section class="mt-2 card">${callout('info', L(`${personName(emp)} 还没有完整的能力评估。发展计划要基于真实的能力差距，请先完成评估。`, `${personName(emp)} has no complete competency assessment. A development plan needs real gaps, so assess first.`))}
+        <a class="mt-3 btn btn-primary" href="#/talent/competency?emp=${emp.id}">${L('去完成能力评估', 'Assess competencies')}</a></section>`);
   }
   const intro = callout('brand', plan.mode === 'gap' ? L('已识别当前职级的能力差距，计划聚焦补齐差距。', 'Gaps against the current level found; the plan focuses on closing them.') : plan.mode === 'growth' ? L(`已达到 ${emp.level} 的要求，计划按更高职级段（${nextLevel(emp.level)}）的标准准备发展。`, `Meets ${emp.level}; the plan prepares for the next level band (${nextLevel(emp.level)}).`) : plan.focus.length ? L('已达到最高要求，计划聚焦优势精进。', 'At the top of the profile; the plan deepens strengths.') : L('所有能力都已是最高等级，系统没有可生成的内容。如需计划，请手动添加发展重点。', 'Every competency is at the top level, so nothing was generated. Add a focus area by hand if a plan is still needed.'));
   idpEditor(el, { plan, emp, courses: d.courses, people: d.active, intro, cancelHref: '#/learning/idp', onSaved: (saved) => { location.hash = `#/learning/idp/${saved.id}`; } });
@@ -112,14 +112,14 @@ async function idpDetail(el, ctx, d) {
   const progress = idpProgress(idp);
   const ended = idp.status !== 'active';
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period} ${badge(tx(IDP_STATUS[idp.status]?.name || [idp.status, idp.status]), IDP_STATUS[idp.status]?.tone)}</div></div></div>
-      <div class="row" style="min-width:220px"><div style="flex:1">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button>${hasRole('hr') ? html`<button class="btn btn-sm no-print" type="button" data-delete-plan aria-label="${L('删除计划', 'Delete plan')}" data-tip="${L('删除计划', 'Delete plan')}">${icon('trash')}</button>` : ''}</div></div>
+    <div class="mb-3 row-between"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 class="title-sm">${L('个人发展计划', 'Development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${idp.period} ${badge(tx(IDP_STATUS[idp.status]?.name || [idp.status, idp.status]), IDP_STATUS[idp.status]?.tone)}</div></div></div>
+      <div class="min-w-220 row"><div class="grow">${meter(progress, 100, 'ok')}</div><strong>${progress}%</strong>${canEditPlan(idp) ? html`<a class="btn btn-sm no-print" href="${detailHref}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a>` : ''}<button class="btn btn-sm no-print" type="button" data-print aria-label="${L('打印', 'Print')}">${icon('printer')}</button>${hasRole('hr') ? html`<button class="btn btn-sm no-print" type="button" data-delete-plan aria-label="${L('删除计划', 'Delete plan')}" data-tip="${L('删除计划', 'Delete plan')}">${icon('trash')}</button>` : ''}</div></div>
     ${ended ? callout('info', html`${L('该计划已结束，行动不再计入待办。', 'This plan has ended; its actions no longer appear in task lists.')} ${canEditPlan(idp) ? html`<button class="btn btn-sm no-print" type="button" data-status="active">${L('重新开启', 'Reopen')}</button>` : ''}`) : ''}
     ${!ended && progress === 100 && canEditPlan(idp) ? callout('ok', html`${L('所有行动都已完成。', 'Every action is done.')} <button class="btn btn-sm no-print" type="button" data-status="completed">${icon('check')}${L('标记计划为已完成', 'Mark plan completed')}</button>`) : ''}
-    <div class="split" style="margin-top:12px"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true, locked: ended, people: d.employees, ownerId: idp.employeeId })}</div>
+    <div class="mt-3 split"><div class="stack">${planBlocks(idp.focus || [], d.courses, { editable: true, locked: ended, people: d.employees, ownerId: idp.employeeId })}</div>
       <div class="stack"><div id="ai-idp"></div>
         <section class="card"><div class="card-head"><h2>${L('上级支持', 'Manager support')}</h2></div>
-          <ul class="small" style="margin:0;padding-left:18px"><li>${L('每月一次发展对话，回顾行动进展', 'Monthly development conversation to review progress')}</li><li>${L('提供挑战性任务与曝光机会', 'Provide stretch work and visibility')}</li><li>${L('季度末对照行为锚点给出反馈', 'Feedback against the anchors each quarter')}</li></ul></section></div></div>`);
+          <ul class="list-plain small"><li>${L('每月一次发展对话，回顾行动进展', 'Monthly development conversation to review progress')}</li><li>${L('提供挑战性任务与曝光机会', 'Provide stretch work and visibility')}</li><li>${L('季度末对照行为锚点给出反馈', 'Feedback against the anchors each quarter')}</li></ul></section></div></div>`);
   on(el, 'change', '[data-toggle]', async (e, cb) => {
     const [fi, ai] = cb.dataset.toggle.split(':').map(Number);
     const focus = structuredClone(idp.focus);
@@ -159,8 +159,8 @@ async function tnaView(el, ctx, d) {
   const r = tna(people, d.departments);
   const top = r.byComp.slice(0, 3);
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
-      <select class="input" id="dept" style="width:auto"><option value="">${L('全公司', 'Whole company')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === dept ? 'selected' : ''}>${loc(x)}</option>`)}</select>
+    <div class="mb-3 row-between">
+      <select class="w-auto input" id="dept" aria-label="${L('部门', 'Department')}"><option value="">${L('全公司', 'Whole company')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === dept ? 'selected' : ''}>${loc(x)}</option>`)}</select>
       ${method(L('优先级 =', 'Priority ='), L('存在差距的人数占比 ×（1 + 平均差距）。先解决"面广且差距大"的能力。', 'share of people with a gap × (1 + average gap). Tackle wide and deep gaps first.'))}
     </div>
     <div class="grid cols-2">
@@ -172,13 +172,13 @@ async function tnaView(el, ctx, d) {
           const courses = d.courses.filter((c) => c.competency === x.key);
           // Same population as the analysis: a missing rating is not a gap.
           const needing = people.filter((e) => assessCompetencies(e.competencies, targetProfile(e.level)).status === 'complete' && targetProfile(e.level)[x.key] - e.competencies[x.key] >= 1);
-          return html`<div class="list-item" style="align-items:flex-start"><div class="grow"><div class="title">${tx(compByKey[x.key].name)} <span class="small muted">${L(`${x.withGap} 人有差距`, `${x.withGap} people with a gap`)}</span></div>
+          return html`<div class="items-start list-item"><div class="grow"><div class="title">${tx(compByKey[x.key].name)} <span class="small muted">${L(`${x.withGap} 人有差距`, `${x.withGap} people with a gap`)}</span></div>
             ${courses.map((c) => html`<div class="meta">${icon('book')} ${loc(c, 'title')} · ${tx(FORMATS[c.format])} · ${c.hours}h</div>`)}</div>
             ${courses[0] && hasRole('hr') ? html`<button class="btn btn-sm" type="button" data-enroll="${courses[0].id}" data-people="${needing.map((e) => e.id).join(',')}">${L(`为 ${needing.length} 人报名`, `Enroll ${needing.length}`)}</button>` : ''}</div>`;
         })}
       </section>
     </div>
-    <section class="card" style="margin-top:16px"><div class="card-head"><div><h2>${L('部门 × 能力 平均差距', 'Average gap by department and competency')}</h2><p>${L('颜色越深差距越大', 'Darker means a bigger gap')}</p></div></div>
+    <section class="mt-4 card"><div class="card-head"><div><h2>${L('部门 × 能力 平均差距', 'Average gap by department and competency')}</h2><p>${L('颜色越深差距越大', 'Darker means a bigger gap')}</p></div></div>
       ${heatmap({ rows: r.matrix.map((m) => ({ label: `${loc(d.departments.find((x) => x.id === m.deptId))} (${m.n})`, cells: m.cells })), cols: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), color: (v) => (v === 0 ? { bg: 'var(--surface-2)', dark: false } : seqColor(v, 2)) })}
     </section>`);
   el.querySelector('#dept').addEventListener('change', (e) => { location.hash = `#/learning/tna${e.target.value ? `?dept=${e.target.value}` : ''}`; });
@@ -205,13 +205,13 @@ async function coursesView(el, ctx, d) {
     return { n: es.length, done: done.length, sat: sat.length ? (sat.reduce((a, b) => a + b, 0) / sat.length).toFixed(1) : '—' };
   };
   setHTML(el, html`
-    <div class="grid cols-4" style="margin-bottom:16px">
+    <div class="mb-4 grid cols-4">
       <div class="card kpi"><span class="label">${L('报名人次', 'Enrollments')}</span><span class="value">${stats.enrollments}</span><span class="sub">${L(`${stats.learners} 名学员`, `${stats.learners} learners`)}</span></div>
       <div class="card kpi"><span class="label">${L('完成率', 'Completion')}</span><span class="value">${fmt.pct(stats.completionRate)}</span></div>
       <div class="card kpi"><span class="label">${L('人均学时', 'Hours per head')}</span><span class="value">${stats.hoursPerHead}<small>h</small></span></div>
       <div class="card kpi"><span class="label">${L('平均满意度', 'Satisfaction')}</span><span class="value">${stats.satisfaction ?? '—'}<small>/5</small></span></div>
     </div>
-    <div class="row-between" style="margin-bottom:12px"><span class="small muted">${L('每门课程对应一项能力，便于从差距直接找到资源', 'Each course maps to a competency, so gaps lead straight to resources')}</span>
+    <div class="mb-3 row-between"><span class="small muted">${L('每门课程对应一项能力，便于从差距直接找到资源', 'Each course maps to a competency, so gaps lead straight to resources')}</span>
       ${hasRole('hr') ? html`<button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增课程', 'Add course')}</button>` : ''}</div>
     <section class="card card-flush"><div class="table-wrap"><table class="table">
       <thead><tr><th>${L('课程', 'Course')}</th><th>${L('对应能力', 'Competency')}</th><th>${L('形式', 'Format')}</th><th class="num">${L('学时', 'Hours')}</th><th class="num">${L('报名/完成', 'Enrolled/done')}</th><th class="num">${L('满意度', 'Rating')}</th><th></th></tr></thead>
@@ -228,9 +228,9 @@ async function coursesView(el, ctx, d) {
       title: loc(c, 'title'),
       wide: true,
       body: html`${es.length ? html`<div class="table-wrap"><table class="table table-compact"><thead><tr><th>${L('学员', 'Learner')}</th><th>${L('状态', 'Status')}</th><th>${L('进度', 'Progress')}</th><th></th></tr></thead>
-        <tbody>${es.map((x) => html`<tr><td>${personLink(emp[x.employeeId])}</td><td>${badge(tx(ENROLL_STATUS[x.status][0]), ENROLL_STATUS[x.status][1])}</td><td style="min-width:100px">${meter(x.progress || 0, 100, 'ok')}</td>
+        <tbody>${es.map((x) => html`<tr><td>${personLink(emp[x.employeeId])}</td><td>${badge(tx(ENROLL_STATUS[x.status][0]), ENROLL_STATUS[x.status][1])}</td><td class="min-w-100">${meter(x.progress || 0, 100, 'ok')}</td>
           <td>${x.status !== 'completed' && (hasRole('hr') || x.employeeId === getActor()) ? html`<button class="btn btn-sm" type="button" data-complete="${x.id}">${L('标记完成', 'Mark done')}</button>` : ''}</td></tr>`)}</tbody></table></div>` : empty(L('暂无学员', 'No learners yet'), '', 'users')}
-        ${hasRole('hr') ? html`<div class="row" style="margin-top:12px"><select class="input" name="add" style="flex:1"><option value="">${L('添加学员…', 'Add a learner…')}</option>${d.active.filter((e2) => !es.some((x) => x.employeeId === e2.id)).map((e2) => html`<option value="${e2.id}">${personName(e2)} · ${loc(e2, 'title')}</option>`)}</select></div>` : ''}`,
+        ${hasRole('hr') ? html`<div class="mt-3 row"><select class="grow input" name="add"><option value="">${L('添加学员…', 'Add a learner…')}</option>${d.active.filter((e2) => !es.some((x) => x.employeeId === e2.id)).map((e2) => html`<option value="${e2.id}">${personName(e2)} · ${loc(e2, 'title')}</option>`)}</select></div>` : ''}`,
       submitLabel: L('添加', 'Add'),
       onOpen: (form) => {
         on(form, 'click', '[data-complete]', async (ev, btn) => {
@@ -270,7 +270,7 @@ async function evalView(el) {
   setHTML(el, html`
     <div class="split-wide">
       <section class="card"><div class="card-head"><h2>${L('柯氏四级评估 + ROI', 'Kirkpatrick four levels + ROI')}</h2></div>
-        <form id="eval-form" class="stack" style="gap:10px">
+        <form id="eval-form" class="gap-3 stack">
           ${field(L('L1 反应层：学员满意度（1-5）', 'L1 Reaction: satisfaction (1-5)'), input('reaction', { type: 'number', min: 1, max: 5, step: 0.1, value: 4.3 }))}
           <div class="form-grid">${field(L('L2 学习层：训前测试分', 'L2 Learning: pre-test'), input('pre', { type: 'number', value: 62 }))}${field(L('训后测试分', 'Post-test'), input('post', { type: 'number', value: 81 }))}</div>
           ${field(L('L3 行为层：上级评价的行为改变（1-5）', 'L3 Behavior: manager-rated change (1-5)'), input('behavior', { type: 'number', min: 1, max: 5, step: 0.1, value: 3.6 }))}
@@ -288,7 +288,7 @@ async function evalView(el) {
     const r = evaluateProgram(Object.fromEntries(new FormData(form)));
     setHTML(out, html`<div class="card-head"><h2>${L('评估结果', 'Results')}</h2></div>
       ${r.levels.map((l) => html`<div class="list-item"><span class="badge ${l.ok ? 'badge-ok' : 'badge-warn'}">L${l.level}</span><div class="grow"><div class="title">${names[l.level]} · ${l.level === 2 ? L(`变化 ${signed(l.value)} 分${l.gain != null ? `（${signed(l.gain)}%）` : ''}`, `${signed(l.value)} points${l.gain != null ? ` (${signed(l.gain)}%)` : ''}`) : l.level === 4 ? (l.value == null ? L('训前指标为 0，无法计算变化率', 'No % change from a zero baseline') : `${l.value > 0 ? '+' : ''}${l.value}%`) : `${l.value} / ${l.max}`}</div><div class="meta">${tx(l.note)}</div></div></div>`)}
-      ${r.roi != null ? html`<div class="row" style="margin-top:12px;gap:24px"><div><div class="small muted">ROI</div><div class="result-big" style="color:var(--${r.roi >= 0 ? 'ok' : 'danger'})">${r.roi}%</div></div><div><div class="small muted">${L('收益成本比', 'Benefit-cost ratio')}</div><div class="result-big">${r.bcr}</div></div></div>` : ''}`);
+      ${r.roi != null ? html`<div class="mt-3 gap-6 row"><div><div class="small muted">ROI</div><div class="result-big" style="color:var(--${r.roi >= 0 ? 'ok' : 'danger'})">${r.roi}%</div></div><div><div class="small muted">${L('收益成本比', 'Benefit-cost ratio')}</div><div class="result-big">${r.bcr}</div></div></div>` : ''}`);
   };
   form.addEventListener('input', render);
   render();
