@@ -330,9 +330,9 @@ async function createEmployeeFromCandidate(c, pos) {
   const emp = await api.post('/api/employees', {
     name: c.name, nameEn: c.nameEn || c.name, email: c.email || '', deptId: pos.deptId, title: pos.title, titleEn: pos.titleEn, level: pos.level,
     managerId: pos.hiringManagerId, location: pos.location, hireDate: start, status: 'active', skills: parsed.skills.slice(0, 8),
-    // No ratings yet: competencies stay unassessed until the manager assesses them.
-    performance: 3, potential: 2, perfHistory: [], competencies: null,
-    lastPromotion: start, compaRatio: c.offer?.salary && pos.salaryMin ? Math.round((c.offer.salary / (((pos.salaryMin + pos.salaryMax) / 2) * 1000)) * 100) / 100 : 1, engagement: 4, fromCandidateId: c.id,
+    // No ratings yet: everything stays unassessed until the manager assesses it.
+    performance: null, potential: null, perfHistory: [], competencies: null,
+    lastPromotion: start, compaRatio: c.offer?.salary && pos.salaryMin ? Math.round((c.offer.salary / (((pos.salaryMin + pos.salaryMax) / 2) * 1000)) * 100) / 100 : 1, engagement: null, fromCandidateId: c.id,
   });
   await api.post('/api/onboarding', { employeeId: emp.id, startDate: start, tasks: buildChecklist(start, { manager: pos.level.startsWith('M') }) });
   toast(L('已创建员工档案与入职计划', 'Employee record and onboarding plan created'));

@@ -15,3 +15,12 @@ test('only an active development plan counts as one in the individual insight', 
     assert.ok(factIds(idps).includes('no_idp'), JSON.stringify(idps));
   }
 });
+
+test('a new hire with no ratings is valid and stays outside the talent grid', async () => {
+  const { validationErrors } = await import('../public/js/engine/validation.js');
+  const { boxKey, flightRisk } = await import('../public/js/engine/talent.js');
+  const hire = { name: '新人', deptId: data.departments[0].id, title: '工程师', level: 'P4', hireDate: TODAY, status: 'active', performance: null, potential: null, engagement: null, competencies: null, perfHistory: [] };
+  assert.deepEqual(validationErrors('employees', hire), []);
+  assert.equal(boxKey(hire.performance, hire.potential), null);
+  assert.equal(flightRisk(hire, TODAY).regrettable, false);
+});

@@ -65,7 +65,7 @@ function employeeForm(e, d, onSaved) {
       ${field(L('离职日期', 'Leave date'), input('leaveDate', { type: 'date', value: e.leaveDate }))}
       ${field(L('离职原因', 'Leave reason'), select('leaveReason', Object.entries(LEAVE_REASONS).map(([k, v]) => [k, tx(v)]), { value: e.leaveReason, placeholder: '—' }))}
       ${field(L('薪酬比较比率', 'Compa-ratio'), input('compaRatio', { type: 'number', step: 0.01, min: 0.5, max: 1.5, value: isNew ? 1 : e.compaRatio }), { hint: L('实际薪酬 ÷ 薪级中位值', 'Pay ÷ band midpoint') })}
-      ${field(L('敬业度（上级评估，1-5）', 'Engagement (manager rating, 1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: isNew ? 4 : e.engagement }), { hint: L('用于流失风险评估；不来自匿名调研，调研从不记录个人答卷', 'Feeds the flight-risk score. Not taken from the anonymous surveys, which never record who answered') })}
+      ${field(L('敬业度（上级评估，1-5）', 'Engagement (manager rating, 1-5)'), input('engagement', { type: 'number', min: 1, max: 5, value: e.engagement }), { hint: L('用于流失风险评估；不来自匿名调研，调研从不记录个人答卷', 'Feeds the flight-risk score. Not taken from the anonymous surveys, which never record who answered') })}
     </div>`,
     onSubmit: async (v) => {
       if (!v.name.trim() || !v.title.trim()) throw new Error(L('请填写姓名和职位', 'Name and job title are required'));
@@ -78,8 +78,8 @@ function employeeForm(e, d, onSaved) {
         // A blank stays unassessed: it must not turn into a rating that feeds the flight-risk score.
         compaRatio: v.compaRatio === '' ? null : Number(v.compaRatio), engagement: v.engagement === '' ? null : Number(v.engagement),
       };
-      // New records start unassessed rather than with invented competency ratings.
-      if (isNew) Object.assign(doc, { performance: 3, potential: 2, perfHistory: [], skills: [], lastPromotion: v.hireDate, competencies: null });
+      // New records start unassessed rather than with invented ratings, so they stay out of the 9-box until rated.
+      if (isNew) Object.assign(doc, { performance: null, potential: null, perfHistory: [], skills: [], lastPromotion: v.hireDate, competencies: null });
       if (!isNew && (v.managerId || null) !== (e.managerId || null)) doc.managerChanged = true;
       const saved = isNew ? await api.post('/api/employees', doc) : await api.put(`/api/employees/${e.id}`, doc);
       await reloadEmployees();
