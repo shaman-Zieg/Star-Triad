@@ -287,7 +287,7 @@ async function evalView(el) {
   const render = () => {
     const r = evaluateProgram(Object.fromEntries(new FormData(form)));
     setHTML(out, html`<div class="card-head"><h2>${L('评估结果', 'Results')}</h2></div>
-      ${r.levels.map((l) => html`<div class="list-item"><span class="badge ${l.ok ? 'badge-ok' : 'badge-warn'}">L${l.level}</span><div class="grow"><div class="title">${names[l.level]} · ${l.level === 2 ? L(`变化 ${signed(l.value)} 分${l.gain != null ? `（${signed(l.gain)}%）` : ''}`, `${signed(l.value)} points${l.gain != null ? ` (${signed(l.gain)}%)` : ''}`) : l.level === 4 ? `${l.value > 0 ? '+' : ''}${l.value}%` : `${l.value} / ${l.max}`}</div><div class="meta">${tx(l.note)}</div></div></div>`)}
+      ${r.levels.map((l) => html`<div class="list-item"><span class="badge ${l.ok ? 'badge-ok' : 'badge-warn'}">L${l.level}</span><div class="grow"><div class="title">${names[l.level]} · ${l.level === 2 ? L(`变化 ${signed(l.value)} 分${l.gain != null ? `（${signed(l.gain)}%）` : ''}`, `${signed(l.value)} points${l.gain != null ? ` (${signed(l.gain)}%)` : ''}`) : l.level === 4 ? (l.value == null ? L('训前指标为 0，无法计算变化率', 'No % change from a zero baseline') : `${l.value > 0 ? '+' : ''}${l.value}%`) : `${l.value} / ${l.max}`}</div><div class="meta">${tx(l.note)}</div></div></div>`)}
       ${r.roi != null ? html`<div class="row" style="margin-top:12px;gap:24px"><div><div class="small muted">ROI</div><div class="result-big" style="color:var(--${r.roi >= 0 ? 'ok' : 'danger'})">${r.roi}%</div></div><div><div class="small muted">${L('收益成本比', 'Benefit-cost ratio')}</div><div class="result-big">${r.bcr}</div></div></div>` : ''}`);
   };
   form.addEventListener('input', render);
