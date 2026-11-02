@@ -154,7 +154,7 @@ async function surveyResult(el, ctx, d) {
   on(el, 'click', '[data-copy]', () => copyText(surveyLink(s)));
   on(el, 'click', '[data-toggle]', async (e, b) => {
     const next = s.status === 'open' ? 'closed' : 'open';
-    await act(b, () => api.put(`/api/surveys/${s.id}`, { status: next, ...(next === 'closed' && { closedAt: today() }) }), next === 'closed' ? L('调研已结束', 'Survey closed') : L('调研已重新开启', 'Survey reopened'));
+    await act(b, () => api.put(`/api/surveys/${s.id}`, { status: next, closedAt: next === 'closed' ? today() : null }), next === 'closed' ? L('调研已结束', 'Survey closed') : L('调研已重新开启', 'Survey reopened'));
     ctx.rerender();
   });
   if (r.n) {
