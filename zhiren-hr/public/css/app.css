@@ -555,3 +555,6 @@ ul.tight li { margin: 2px 0; }
 .idp-mix strong { text-align: right; }
 .idp-side { position: sticky; top: 72px; }
 @media (max-width: 1100px) { .idp-side { position: static; } }
+.idp-errors { margin-top: 12px; }
+.idp-focus.has-error { border-color: var(--danger-mark); }
+.idp-action.has-error { box-shadow: inset 3px 0 0 var(--danger-mark); padding-left: 10px; }

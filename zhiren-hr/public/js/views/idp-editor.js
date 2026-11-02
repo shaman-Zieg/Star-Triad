@@ -27,6 +27,8 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
   const isNew = !plan.id;
   const draft = { period: plan.period || String(new Date().getFullYear()), status: plan.status || 'active', focus: structuredClone(plan.focus || []) };
   const defaultDue = () => addDays(today(), 60);
+  // Errors stay quiet until the first save attempt, then update as each one is fixed.
+  let checking = false;
   const usedElsewhere = (fi) => new Set(draft.focus.filter((_, i) => i !== fi).map((f) => f.competency));
 
   // Courses for this competency come first, since a plan usually draws on them.
@@ -76,10 +78,20 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     </div>`;
   };
 
-  const draw = () => setHTML(el, html`
+  const markErrors = () => {
+    const errors = checking ? idpDraftErrors(draft) : [];
+    const box = el.querySelector('.idp-errors');
+    box.hidden = !errors.length;
+    setHTML(box, errors.length ? callout('danger', html`<strong>${L(`还有 ${errors.length} 处需要修改：`, `${errors.length} item(s) to fix:`)}</strong><ul style="margin:4px 0 0;padding-left:18px">${errors.map((x) => html`<li>${tx(x.text)}</li>`)}</ul>`) : '');
+    const where = new Set(errors.map((x) => x.where));
+    el.querySelectorAll('[data-where]').forEach((node) => node.classList.toggle('has-error', where.has(node.dataset.where)));
+    return errors;
+  };
+  const render = () => setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="${cancelHref}" class="small">← ${L('返回', 'Back')}</a><h2 style="font-size:19px">${isNew ? L('新建发展计划', 'New development plan') : L('编辑发展计划', 'Edit development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
       <div class="row"><a class="btn" href="${cancelHref}">${L('取消', 'Cancel')}</a><button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div></div>
     ${intro || ''}
+    <div class="idp-errors" role="alert" hidden></div>
     <div class="split" style="margin-top:12px"><div class="stack">
       <section class="card"><div class="card-head"><h2>${L('计划信息', 'Plan details')}</h2></div>
         <div class="form-grid">
@@ -89,12 +101,19 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
       ${draft.focus.map(focusCard)}
       <div>${draft.focus.length < COMPETENCIES.length ? html`<button class="btn" type="button" data-add-focus>${icon('plus')}${L('添加发展重点', 'Add focus area')}</button>` : ''}</div>
     </div>${sidePanel()}</div>`);
+  const draw = () => {
+    render();
+    markErrors();
+  };
 
   const at = (value) => draft.focus[Number(value)];
   on(el, 'input', '[name=period]', (e, box) => { draft.period = box.value; });
   on(el, 'change', '[name=status]', (e, box) => { draft.status = box.value; });
   on(el, 'input', '[data-goal]', (e, box) => { at(box.dataset.goal).goal = [box.value, box.value]; });
-  on(el, 'change', '[data-actual]', (e, box) => { at(box.dataset.actual).actual = Number(box.value); });
+  on(el, 'change', '[data-actual]', (e, box) => {
+    at(box.dataset.actual).actual = Number(box.value);
+    markErrors();
+  });
   on(el, 'change', '[data-target]', (e, box) => { at(box.dataset.target).target = Number(box.value); draw(); });
   on(el, 'change', '[data-competency]', (e, box) => {
     // The levels describe one competency, so a new choice starts from that competency's own values.
@@ -106,8 +125,14 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     const [fi, ai] = value.split(':').map(Number);
     return draft.focus[fi].actions[ai];
   };
-  on(el, 'input', '[data-text]', (e, box) => { action(box.dataset.text).text = [box.value, box.value]; });
-  on(el, 'change', '[data-due]', (e, box) => { action(box.dataset.due).due = box.value; });
+  on(el, 'input', '[data-text]', (e, box) => {
+    action(box.dataset.text).text = [box.value, box.value];
+    markErrors();
+  });
+  on(el, 'change', '[data-due]', (e, box) => {
+    action(box.dataset.due).due = box.value;
+    markErrors();
+  });
   on(el, 'change', '[data-done]', (e, box) => { action(box.dataset.done).done = box.checked; });
   on(el, 'change', '[data-owner]', (e, box) => {
     const a = action(box.dataset.owner);
@@ -153,8 +178,8 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     el.querySelector(`[data-competency="${draft.focus.length - 1}"]`)?.scrollIntoView({ block: 'center' });
   });
   on(el, 'click', '[data-save]', async (e, button) => {
-    const errors = idpDraftErrors(draft);
-    if (errors.length) return toast(tx(errors[0].text), 'error');
+    checking = true;
+    if (markErrors().length) return el.querySelector('.idp-errors').scrollIntoView({ block: 'center' });
     button.disabled = true;
     try {
       const body = { focus: cleanFocus(draft.focus), period: draft.period.trim() };
