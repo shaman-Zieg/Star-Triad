@@ -104,6 +104,13 @@ function validateResponse(body) {
   return out;
 }
 
+// Older plans carry no name of their own, which left the activity feed showing a bare record id.
+function activityDoc(col, doc) {
+  if (col !== 'idps' || doc.name) return doc;
+  const employee = db.get('employees', doc.employeeId);
+  return employee ? { ...doc, name: employee.name, nameEn: employee.nameEn } : doc;
+}
+
 const hasActivePlan = (employeeId, exceptId) => db.list('idps', { employeeId }).some(p => p.mode !== 'retention' && p.status === 'active' && p.id !== exceptId);
 
 function changeDetail(before, after) {
@@ -222,7 +229,7 @@ async function handleApi(req, res, url, auth) {
       if (!anonymous && actor && (auth.required || !data.createdBy)) data.createdBy = actor.id;
       if (!anonymous) validateDocument(col, data);
       const doc = db.insert(col, data);
-      db.logActivity({ actor: anonymous ? null : actor, action: 'create', col, doc: anonymous ? { id: doc.id } : doc });
+      db.logActivity({ actor: anonymous ? null : actor, action: 'create', col, doc: anonymous ? { id: doc.id } : activityDoc(col, doc) });
       return sendJson(res, 201, anonymous ? { ok: true } : doc);
     }
     throw new HttpError(405, 'Method not allowed');
@@ -269,14 +276,14 @@ async function handleApi(req, res, url, auth) {
     validateDocument(col, { ...existing, ...patch });
     const result = db.update(col, id, patch);
     if (!result) throw new HttpError(404, 'Not found');
-    db.logActivity({ actor, action: 'update', col, doc: result.after, detail: changeDetail(result.before, result.after) });
+    db.logActivity({ actor, action: 'update', col, doc: activityDoc(col, result.after), detail: changeDetail(result.before, result.after) });
     return sendJson(res, 200, readDocuments(col, [result.after], user)[0]);
   }
   if (method === 'DELETE') {
     authorizeWrite(col, method, {}, db.get(col, id), user);
     const doc = db.remove(col, id);
     if (!doc) throw new HttpError(404, 'Not found');
-    db.logActivity({ actor, action: 'delete', col, doc });
+    db.logActivity({ actor, action: 'delete', col, doc: activityDoc(col, doc) });
     return sendJson(res, 200, { ok: true });
   }
   throw new HttpError(405, 'Method not allowed');

@@ -89,3 +89,11 @@ test('saving from a stale copy is refused instead of overwriting newer changes',
   assert.equal(saved.status, 200);
   assert.equal(saved.data.expectedUpdatedAt, undefined, 'the check is not stored on the plan');
 });
+
+test('the activity feed names the employee whose plan changed', async () => {
+  const plan = plans().find((p) => !p.name);
+  assert.ok(plan, 'seeded plans carry no name');
+  await call('PUT', `/api/idps/${plan.id}`, { period: 'named' });
+  const [latest] = (await call('GET', '/api/activity?limit=1')).data;
+  assert.equal(latest.label, db.get('employees', plan.employeeId).name);
+});
