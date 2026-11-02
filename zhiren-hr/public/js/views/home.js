@@ -105,11 +105,21 @@ export default async function home(el) {
     inbox: L(`待处理服务申请：排除已解决和已关闭，当前 ${openTickets.length} 件。超时按服务类别的工作日SLA截止日期判断。`, `Unresolved, unclosed requests: ${openTickets.length}. Overdue uses the service-category business-day SLA.`),
     shield: L(`关键岗位继任覆盖率=至少有一名合格继任候选人的关键岗位数÷关键岗位总数。资格由继任模型检查，高风险或不合格候选人不计入。计算：${succ.plans.length-weak.length} ÷ ${succ.plans.length} ×100%${succ.plans.length ? '='+fmt.pct((succ.plans.length-weak.length)/succ.plans.length,0) : '，暂无关键岗位，暂不计算'}。`, `Succession coverage = roles with an eligible successor / all key roles: ${succ.plans.length-weak.length} / ${succ.plans.length}. High-risk or ineligible nominees are excluded.`),
   };
-  const kpi = (label, value, sub, href, ic) => html`<a class="card kpi tool-card" href="${href}" data-tip="${tips[ic]}" aria-label="${label}：${tips[ic]}"><span class="label">${icon(ic)}${label}<span aria-hidden="true" class="muted"> ⓘ</span></span><span class="value">${value}</span><span class="sub">${sub}</span></a>`;
+  const kpi = (label, value, sub, href, ic) => html`<a class="kpi" href="${href}" data-tip="${tips[ic]}" aria-label="${label}：${tips[ic]}"><span class="label">${label}${icon('info')}</span><span class="value">${value}</span><span class="sub">${sub}</span></a>`;
 
   setHTML(el, html`
     ${pageHead(L(`你好，${me ? personName(me) : ''}`, `Hello, ${me ? personName(me) : ''}`), L('这是今天的组织与人才概览。所有指标都可点击进入对应工具。', 'Here is today\'s view of your people and organization. Every tile opens the matching tool.'))}
-    <div class="grid cols-4">
+    <div class="grid cols-3">
+      <section class="card span-2">
+        <div class="card-head"><div><h2>${L('需要关注', 'Needs attention')}</h2><p>${L('由规则引擎根据实时数据自动识别', 'Detected automatically from live data')}</p></div>${alerts.length ? badge(alerts.length) : ''}</div>
+        ${alerts.length ? html`<div class="attention">${alerts.map((a) => html`<a class="attention-${a.tone}" href="${a.href}"><i class="attention-dot" aria-hidden="true"></i><span>${a.text}</span>${icon('chevron-right')}</a>`)}</div>` : callout('ok', L('一切正常，暂无需要处理的事项。', 'All clear. Nothing needs attention right now.'))}
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>${L('最近动态', 'Recent activity')}</h2></div>
+        <div class="timeline">${activity.length ? activity.slice(0, 7).map((a) => html`<div class="timeline-item"><time>${fmt.rel(a.at)}</time><span>${activityLine(a)}</span></div>`) : html`<p class="muted">${L('暂无动态', 'No activity yet')}</p>`}</div>
+      </section>
+    </div>
+    <div class="card kpi-strip mt-4">
       ${kpi(L('在职人数', 'Headcount'), active.length, L(`本月新入职 ${newThisMonth} 人 · ${d.departments.length} 个部门`, `${newThisMonth} joined this month · ${d.departments.length} departments`), '#/org/structure', 'users')}
       ${kpi(L('招聘需求', 'Open roles'), html`${open.length}<small>${L(`个职位 / ${toHire} 人`, `jobs / ${toHire} hires`)}</small>`, L(`管道中 ${inFlight.length} 位候选人${timeToHire ? ` · 平均招聘周期 ${timeToHire} 天` : ''}`, `${inFlight.length} candidates in process${timeToHire ? ` · ${timeToHire} days to hire` : ''}`), '#/recruit/positions', 'briefcase')}
       ${kpi(L('年化离职率', 'Annual turnover'), fmt.pct(turnover, 1), L(`近 12 个月离职 ${leavers.length} 人，主动离职 ${tt.voluntary} 人`, `${leavers.length} leavers in 12 months, ${tt.voluntary} voluntary`), '#/org/structure', 'route')}
@@ -119,17 +129,7 @@ export default async function home(el) {
       ${kpi(L('待处理服务申请', 'Open requests'), openTickets.length, overdue.length ? L(`${overdue.length} 个已超时`, `${overdue.length} past SLA`) : L('均在时效内', 'All within SLA'), '#/service/requests', 'inbox')}
       ${kpi(L('关键岗位继任覆盖', 'Succession coverage'), succ.plans.length ? fmt.pct((succ.plans.length - weak.length) / succ.plans.length, 0) : '—', L(`${succ.plans.length} 个关键岗位 · ${weak.length} 个无合适继任者`, `${succ.plans.length} key roles · ${weak.length} with no suitable successor`), '#/talent/succession', 'shield')}
     </div>
-    <div class="grid cols-3" style="margin-top:16px">
-      <section class="card span-2">
-        <div class="card-head"><div><h2>${L('需要关注', 'Needs attention')}</h2><p>${L('由规则引擎根据实时数据自动识别', 'Detected automatically from live data')}</p></div></div>
-        ${alerts.length ? html`<div class="callouts">${alerts.map((a) => html`<a href="${a.href}" style="color:inherit;text-decoration:none">${callout(a.tone, a.text)}</a>`)}</div>` : callout('ok', L('一切正常，暂无需要处理的事项。', 'All clear. Nothing needs attention right now.'))}
-      </section>
-      <section class="card">
-        <div class="card-head"><h2>${L('最近动态', 'Recent activity')}</h2></div>
-        <div class="timeline">${activity.length ? activity.slice(0, 7).map((a) => html`<div class="timeline-item"><time>${fmt.rel(a.at)}</time><span>${activityLine(a)}</span></div>`) : html`<p class="muted">${L('暂无动态', 'No activity yet')}</p>`}</div>
-      </section>
-    </div>
-    <div class="grid cols-3" style="margin-top:16px">
+    <div class="mt-4 grid cols-3">
       <section class="card">
         <div class="card-head"><div><h2>${L('招聘漏斗', 'Hiring funnel')}</h2><p>${L('所有职位累计到达各阶段的人数', 'Candidates who reached each stage, all jobs')}</p></div></div>
         ${hbars(stageCounts, { head: [L('阶段', 'Stage'), L('人数', 'People')] })}
@@ -143,7 +143,7 @@ export default async function home(el) {
         ${columns(flow, [{ name: L('入职', 'Joined'), cls: 's1' }, { name: L('离职', 'Left'), cls: 's2' }])}
       </section>
     </div>
-    <section class="card" style="margin-top:16px">
+    <section class="mt-4 card">
       <div class="card-head"><div><h2>${L('常用工具', 'Popular tools')}</h2><p>${L('把 HR 管理经验沉淀为可复用的工具', 'HR know-how turned into reusable tools')}</p></div><a class="btn btn-sm" href="#/toolkit">${L('全部工具', 'All tools')}</a></div>
       <div class="grid cols-4">
         ${[
