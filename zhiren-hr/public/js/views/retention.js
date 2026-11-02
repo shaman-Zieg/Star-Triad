@@ -44,6 +44,7 @@ export function retentionView(el, ctx, d, evaluation = false) {
     const action = plan.actions[Number(index)];
     modal({ title: L('调整行动与责任人', 'Edit action and owner'), body: html`${field(L('行动方案', 'Action'), textarea('text', { value: tx(action.text), required: true }))}${field(L('具体负责人', 'Owner'), input('owner', { value: tx(action.owner), required: true }))}${field(L('截止日期', 'Due date'), input('due', { type: 'date', value: action.due, required: true }))}${field(L('验收标准', 'Acceptance criteria'), textarea('evidence', { value: tx(action.evidence), required: true }))}`, onSubmit: async v => {
       if (!v.text.trim() || !v.owner.trim() || !v.evidence.trim()) throw new Error(L('请填写方案、负责人和验收标准', 'Action, owner and acceptance criteria are required'));
+      if (!v.due) throw new Error(L('请填写截止日期', 'Due date is required'));
       const actions = structuredClone(plan.actions);
       actions[Number(index)] = { ...action, text: [v.text, v.text], owner: [v.owner, v.owner], due: v.due, evidence: [v.evidence, v.evidence] };
       await api.put(`/api/idps/${id}`, { actions }); ctx.rerender();
