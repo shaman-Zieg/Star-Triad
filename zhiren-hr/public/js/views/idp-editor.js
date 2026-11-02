@@ -1,8 +1,9 @@
 // Editing a development plan: levels, goals and 70-20-10 actions, saved together.
-import { html, setHTML, api, today, personName, avatar, badge, field, input, textarea, on, toast, hasRole, getActor, icon } from '../core.js';
+import { html, setHTML, api, today, personName, avatar, badge, callout, field, input, meter, on, toast, hasRole, getActor, icon } from '../core.js';
 import { L, tx, loc } from '../i18n.js';
 import { compByKey, COMPETENCIES, gaps, targetProfile } from '../engine/competency.js';
-import { ACTION_TYPES, IDP_STATUS, idpDraftErrors, newAction, newFocusArea } from '../engine/learning.js';
+import { ACTION_TYPES, IDP_STATUS, idpDraftErrors, idpMix, newAction, newFocusArea } from '../engine/learning.js';
+import { radar } from '../charts.js';
 import { addDays } from '../engine/text.js';
 
 // Mirrors the server rule: nobody rewrites their own development goals.
@@ -62,11 +63,24 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     <div class="row" style="margin-top:10px">${ACTION_ORDER.map((t) => html`<button class="btn btn-sm" type="button" data-add-action="${fi}:${t}">${icon('plus')}${tx(ACTION_TYPES[t])}</button>`)}</div>
   </section>`;
 
+  // The target line follows the draft, so changing a level shows up here straight away.
+  const sidePanel = () => {
+    const mix = idpMix(draft.focus);
+    const missing = mix.filter((m) => !m.count).map((m) => tx(ACTION_TYPES[m.type]));
+    return html`<div class="stack idp-side">
+      <section class="card"><div class="card-head"><div><h2>${L('行动结构', 'Action mix')}</h2><p>${L('参考比例 70-20-10，不必严格一致', 'A guide of 70-20-10, not a quota')}</p></div></div>
+        ${mix.map((m) => html`<div class="idp-mix"><span class="small">${tx(ACTION_TYPES[m.type])}</span>${meter(m.share, 100, m.type === '70' ? 'ok' : '')}<strong class="small num">${m.count} · ${m.share}%</strong></div>`)}
+        ${missing.length && draft.focus.length ? callout('warn', L(`还没有「${missing.join('、')}」类行动。`, `No actions yet for: ${missing.join(', ')}.`)) : ''}</section>
+      ${emp.competencies ? html`<section class="card"><div class="card-head"><h2>${L('能力对照', 'Profile vs target')}</h2></div>
+        ${radar({ axes: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), series: [{ name: L('当前', 'Current'), values: emp.competencies, cls: 's1' }, { name: L('计划目标', 'Plan target'), values: { ...emp.competencies, ...Object.fromEntries(draft.focus.map((f) => [f.competency, f.target])) }, cls: 's2' }], size: 300 })}</section>` : ''}
+    </div>`;
+  };
+
   const draw = () => setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="${cancelHref}" class="small">← ${L('返回', 'Back')}</a><h2 style="font-size:19px">${isNew ? L('新建发展计划', 'New development plan') : L('编辑发展计划', 'Edit development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
       <div class="row"><a class="btn" href="${cancelHref}">${L('取消', 'Cancel')}</a><button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div></div>
     ${intro || ''}
-    <div class="stack" style="margin-top:12px">
+    <div class="split" style="margin-top:12px"><div class="stack">
       <section class="card"><div class="card-head"><h2>${L('计划信息', 'Plan details')}</h2></div>
         <div class="form-grid">
           ${field(L('计划周期', 'Period'), input('period', { value: draft.period, maxlength: 80, placeholder: L('如：2026 下半年', 'e.g. H2 2026') }))}
@@ -74,7 +88,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
         </div></section>
       ${draft.focus.map(focusCard)}
       <div>${draft.focus.length < COMPETENCIES.length ? html`<button class="btn" type="button" data-add-focus>${icon('plus')}${L('添加发展重点', 'Add focus area')}</button>` : ''}</div>
-    </div>`);
+    </div>${sidePanel()}</div>`);
 
   const at = (value) => draft.focus[Number(value)];
   on(el, 'input', '[name=period]', (e, box) => { draft.period = box.value; });
