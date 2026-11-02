@@ -9,7 +9,8 @@ import {
 } from '../engine/service.js';
 import { COMPETENCIES, LEVELS, targetProfile } from '../engine/competency.js';
 import { BOXES, boxKey, flightRisk, PERF_SCALE } from '../engine/talent.js';
-import { idpProgress } from '../engine/learning.js';
+import { activeDevelopmentPlan, idpProgress } from '../engine/learning.js';
+import { canEditPlan } from './idp-editor.js';
 import { skillLabel } from '../engine/skills.js';
 import { radar } from '../charts.js';
 import { md, mdToHtml } from '../md.js';
@@ -131,7 +132,9 @@ async function profile(el, ctx, d) {
   // Like retention plans, a flight-risk label is for HR and managers, not the person it describes.
   const risk = hasRole('hr') || (hasRole('manager') && e.id !== getActor()) ? flightRisk(e, today()) : null;
   const enrolls = more.enrollments.filter((x) => x.employeeId === e.id);
-  const idp = more.idps.find((x) => x.employeeId === e.id && x.mode !== 'retention');
+  // The active plan when there is one, otherwise the most recent finished plan.
+  const currentIdp = activeDevelopmentPlan(more.idps, e.id);
+  const idp = currentIdp || more.idps.filter((x) => x.employeeId === e.id && x.mode !== 'retention').at(-1);
   const tickets = more.tickets.filter((x) => x.requesterId === e.id);
   const ob = more.onboarding.find((x) => x.employeeId === e.id);
   const courseBy = byId(more.courses);
@@ -155,7 +158,7 @@ async function profile(el, ctx, d) {
         <div class="row" style="margin-bottom:8px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('待评估', 'Not assessed'))}${badge(`${L('绩效', 'Perf')} ${e.performance ?? '—'} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential ?? '—'}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
         ${radar({ axes: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), series: [{ name: L('当前', 'Current'), values: e.competencies || {}, cls: 's1' }, { name: L('目标', 'Target'), values: targetProfile(e.level), cls: 's2' }], size: 280 })}</section>
       <div class="stack">
-        <section class="card"><div class="card-head"><h2>${L('学习发展', 'Learning')}</h2>${idp ? html`<a class="btn btn-sm" href="#/learning/idp/${idp.id}">IDP ${idpProgress(idp)}%</a>` : html`<a class="btn btn-sm" href="#/learning/idp?emp=${e.id}">${L('创建 IDP', 'Create IDP')}</a>`}</div>
+        <section class="card"><div class="card-head"><h2>${L('学习发展', 'Learning')}</h2><div class="row">${idp ? html`<a class="btn btn-sm" href="#/learning/idp/${idp.id}">IDP ${idpProgress(idp)}%</a>` : ''}${!currentIdp && e.status !== 'left' && canEditPlan({ employeeId: e.id }) ? html`<a class="btn btn-sm" href="#/learning/idp?emp=${e.id}">${L('创建 IDP', 'Create IDP')}</a>` : ''}</div></div>
           ${enrolls.length ? enrolls.map((x) => html`<div class="list-item"><div class="grow"><div>${loc(courseBy[x.courseId], 'title')}</div></div>${badge(tx(ENROLL_STATUS[x.status][0]), ENROLL_STATUS[x.status][1])}</div>`) : html`<p class="muted small">${L('暂无学习记录', 'No courses yet')}</p>`}</section>
         <section class="card"><div class="card-head"><h2>${L('服务申请', 'Requests')}</h2></div>
           ${tickets.length ? tickets.map((t) => html`<a class="list-item" href="#/service/requests/${t.id}" style="color:inherit;text-decoration:none"><div class="grow"><div>${loc(t, 'title')}</div><div class="meta">${fmt.date(t.createdAt)}</div></div>${statusBadge(t.status)}</a>`) : html`<p class="muted small">${L('暂无申请', 'No requests')}</p>`}</section>
