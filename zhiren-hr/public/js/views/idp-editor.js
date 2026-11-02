@@ -1,8 +1,9 @@
 // Editing a development plan: levels, goals and 70-20-10 actions, saved together.
 import { html, setHTML, api, today, personName, avatar, badge, field, input, textarea, on, toast, hasRole, getActor, icon } from '../core.js';
 import { L, tx, loc } from '../i18n.js';
-import { compByKey, COMPETENCIES } from '../engine/competency.js';
-import { ACTION_TYPES, IDP_STATUS, idpDraftErrors } from '../engine/learning.js';
+import { compByKey, COMPETENCIES, gaps, targetProfile } from '../engine/competency.js';
+import { ACTION_TYPES, IDP_STATUS, idpDraftErrors, newAction, newFocusArea } from '../engine/learning.js';
+import { addDays } from '../engine/text.js';
 
 // Mirrors the server rule: nobody rewrites their own development goals.
 export const canEditPlan = (plan) => hasRole('hr') || (hasRole('manager') && plan.employeeId !== getActor());
@@ -24,6 +25,7 @@ const ACTION_ORDER = ['70', '20', '10'];
 export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, onSaved }) {
   const isNew = !plan.id;
   const draft = { period: plan.period || String(new Date().getFullYear()), status: plan.status || 'active', focus: structuredClone(plan.focus || []) };
+  const defaultDue = () => addDays(today(), 60);
   const usedElsewhere = (fi) => new Set(draft.focus.filter((_, i) => i !== fi).map((f) => f.competency));
 
   // Courses for this competency come first, since a plan usually draws on them.
@@ -44,10 +46,11 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
       <label class="small">${L('截止', 'Due')} <input class="input" type="date" data-due="${fi}:${ai}" value="${a.due}"></label>
       <label class="small">${L('负责人', 'Owner')} <select class="input" data-owner="${fi}:${ai}"><option value="">${L('员工本人', 'The employee')}</option>${ownerOptions(a)}</select></label>
     </div>
+    <button class="icon-btn" type="button" data-del-action="${fi}:${ai}" aria-label="${L('删除行动', 'Remove action')}" data-tip="${L('删除行动', 'Remove action')}">${icon('trash')}</button>
   </div>`;
 
   const focusCard = (f, fi) => html`<section class="card idp-focus" data-where="focus-${fi}">
-    <div class="card-head"><h2>${L(`发展重点 ${fi + 1}`, `Focus area ${fi + 1}`)}</h2></div>
+    <div class="card-head"><h2>${L(`发展重点 ${fi + 1}`, `Focus area ${fi + 1}`)}</h2><button class="btn btn-sm" type="button" data-del-focus="${fi}">${icon('trash')}${L('移除此重点', 'Remove this area')}</button></div>
     <div class="form-grid cols-3">
       ${field(L('能力', 'Competency'), html`<select class="input" data-competency="${fi}">${COMPETENCIES.filter((c) => c.key === f.competency || !usedElsewhere(fi).has(c.key)).map((c) => html`<option value="${c.key}" ${c.key === f.competency ? 'selected' : ''}>${tx(c.name)}</option>`)}</select>`)}
       ${field(L('当前等级', 'Current level'), html`<select class="input" data-actual="${fi}">${levelOptions(f.actual)}</select>`)}
@@ -56,6 +59,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     </div>
     <div class="section-title">${L('发展行动', 'Actions')}</div>
     ${f.actions.map((a, ai) => actionRow(a, fi, ai))}
+    <div class="row" style="margin-top:10px">${ACTION_ORDER.map((t) => html`<button class="btn btn-sm" type="button" data-add-action="${fi}:${t}">${icon('plus')}${tx(ACTION_TYPES[t])}</button>`)}</div>
   </section>`;
 
   const draw = () => setHTML(el, html`
@@ -69,6 +73,7 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
           ${isNew ? '' : field(L('状态', 'Status'), html`<select class="input" name="status">${Object.entries(IDP_STATUS).map(([k, s]) => html`<option value="${k}" ${k === draft.status ? 'selected' : ''}>${tx(s.name)}</option>`)}</select>`)}
         </div></section>
       ${draft.focus.map(focusCard)}
+      <div>${draft.focus.length < COMPETENCIES.length ? html`<button class="btn" type="button" data-add-focus>${icon('plus')}${L('添加发展重点', 'Add focus area')}</button>` : ''}</div>
     </div>`);
 
   const at = (value) => draft.focus[Number(value)];
@@ -77,7 +82,12 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
   on(el, 'input', '[data-goal]', (e, box) => { at(box.dataset.goal).goal = [box.value, box.value]; });
   on(el, 'change', '[data-actual]', (e, box) => { at(box.dataset.actual).actual = Number(box.value); });
   on(el, 'change', '[data-target]', (e, box) => { at(box.dataset.target).target = Number(box.value); draw(); });
-  on(el, 'change', '[data-competency]', (e, box) => { at(box.dataset.competency).competency = box.value; draw(); });
+  on(el, 'change', '[data-competency]', (e, box) => {
+    // The levels describe one competency, so a new choice starts from that competency's own values.
+    const { actual, target } = newFocusArea(box.value, emp, defaultDue());
+    Object.assign(at(box.dataset.competency), { competency: box.value, actual, target });
+    draw();
+  });
   const action = (value) => {
     const [fi, ai] = value.split(':').map(Number);
     return draft.focus[fi].actions[ai];
@@ -102,6 +112,31 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
     if (course) Object.assign(a, { courseId: course.id, text: [course.title, course.titleEn || course.title] });
     else delete a.courseId;
     draw();
+  });
+  on(el, 'click', '[data-add-action]', (e, b) => {
+    const [fi, type] = b.dataset.addAction.split(':');
+    const list = at(fi).actions;
+    list.push(newAction(type, defaultDue()));
+    draw();
+    el.querySelector(`[data-text="${fi}:${list.length - 1}"]`)?.focus();
+  });
+  on(el, 'click', '[data-del-action]', (e, b) => {
+    const [fi, ai] = b.dataset.delAction.split(':').map(Number);
+    draft.focus[fi].actions.splice(ai, 1);
+    draw();
+  });
+  on(el, 'click', '[data-del-focus]', (e, b) => {
+    draft.focus.splice(Number(b.dataset.delFocus), 1);
+    draw();
+  });
+  on(el, 'click', '[data-add-focus]', () => {
+    // Suggest the widest remaining gap, so the common case needs no further choosing.
+    const used = new Set(draft.focus.map((f) => f.competency));
+    const next = gaps(emp.competencies || {}, targetProfile(emp.level)).find((g) => !used.has(g.key));
+    if (!next) return;
+    draft.focus.push(newFocusArea(next.key, emp, defaultDue()));
+    draw();
+    el.querySelector(`[data-competency="${draft.focus.length - 1}"]`)?.scrollIntoView({ block: 'center' });
   });
   on(el, 'click', '[data-save]', async (e, button) => {
     const errors = idpDraftErrors(draft);
