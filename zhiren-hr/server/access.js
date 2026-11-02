@@ -86,12 +86,10 @@ export function authorizeWrite(col, method, body, previous, user) {
     const employeeId = previous?.employeeId || body.employeeId;
     if (typeof employeeId !== 'string' || !/^[a-z0-9]{1,24}$/i.test(employeeId)) deny();
     if (!employeeInScope(db.get('employees', employeeId), user)) deny();
-    if (user.role === 'manager') {
-      if (method === 'POST' && body.mode === 'retention') {
-        if (employeeId === user.employeeId) deny();
-        return { employeeId, mode: 'retention' };
-      }
-      only(body, method === 'POST' ? ['employeeId', 'period', 'status', 'mode', 'focus', 'name', 'nameEn'] : ['focus', 'actions', 'reviews', 'status']);
+    // Nobody sets their own development goals: a manager's own plan follows the employee rules below.
+    if (user.role === 'manager' && employeeId !== user.employeeId) {
+      if (method === 'POST' && body.mode === 'retention') return { employeeId, mode: 'retention' };
+      only(body, method === 'POST' ? ['employeeId', 'period', 'status', 'mode', 'focus', 'name', 'nameEn'] : ['focus', 'actions', 'reviews', 'status', 'period']);
       return body;
     }
     if (method !== 'PUT' || previous.mode === 'retention') deny();

@@ -170,3 +170,18 @@ test('onboarding tasks are writable only by their actual responsible person', ()
   assert.throws(() => authorizeWrite('onboarding', 'PUT', toggle(2), plan, manager), { status: 403 });
   assert.throws(() => authorizeWrite('onboarding', 'PUT', { tasks: [null] }, plan, employee), { status: 403 });
 });
+
+test('managers edit plans of their team but only tick actions on their own', () => {
+  const area = () => [{ competency: 'learning', actions: [{ text: ['Learn', 'Learn'], due: '2026-12-01', done: false }] }];
+  const own = { employeeId: 'e2', mode: 'gap', status: 'active', focus: area() };
+  const report = { employeeId: 'e3', mode: 'gap', status: 'active', focus: area() };
+  const rewritten = area();
+  rewritten[0].actions[0].text = ['Rewritten', 'Rewritten'];
+  assert.deepEqual(authorizeWrite('idps', 'PUT', { focus: rewritten, status: 'completed', period: '2027' }, report, manager), { focus: rewritten, status: 'completed', period: '2027' });
+  assert.throws(() => authorizeWrite('idps', 'PUT', { focus: rewritten }, own, manager), { status: 403 });
+  assert.throws(() => authorizeWrite('idps', 'PUT', { status: 'completed' }, own, manager), { status: 403 });
+  assert.throws(() => authorizeWrite('idps', 'POST', { employeeId: 'e2', mode: 'gap', focus: rewritten }, null, manager), { status: 403 });
+  const ticked = area();
+  ticked[0].actions[0].done = true;
+  assert.deepEqual(authorizeWrite('idps', 'PUT', { focus: ticked }, own, manager), { focus: ticked });
+});
