@@ -99,3 +99,12 @@ test('the activity feed names the employee whose plan changed', async () => {
   const [latest] = (await call('GET', '/api/activity?limit=1')).data;
   assert.equal(latest.label, db.get('employees', plan.employeeId).name);
 });
+
+test('survey answers cannot be attributed to a department outside the survey scope', async () => {
+  const scoped = db.insert('surveys', { title: 'Team', model: 'engagement', scope: 'd02', status: 'open', anonymous: true });
+  const sent = (deptId) => call('POST', '/api/responses', { surveyId: scoped.id, deptId, answers: { basic0: 4 } });
+  await sent('d02');
+  await sent('d03');
+  assert.deepEqual(db.list('responses', { surveyId: scoped.id }).map((r) => r.deptId), ['d02', undefined]);
+  db.remove('surveys', scoped.id);
+});

@@ -98,7 +98,8 @@ function validateResponse(body) {
   }
   if (!Object.keys(answers).length) throw new HttpError(400, 'Please answer at least one question');
   const out = { surveyId: survey.id, answers };
-  if (body.deptId && db.get('departments', String(body.deptId))) out.deptId = String(body.deptId);
+  // A department outside the survey's scope could not have been offered on the form.
+  if (body.deptId && db.get('departments', String(body.deptId)) && [String(body.deptId), 'all'].includes(survey.scope)) out.deptId = String(body.deptId);
   if (Number.isInteger(body.enps) && body.enps >= 0 && body.enps <= 10) out.enps = body.enps;
   if (body.comment && typeof body.comment === 'string') out.comment = body.comment.slice(0, 1000);
   return out;
