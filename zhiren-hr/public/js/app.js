@@ -40,9 +40,9 @@ function shell() {
         ? html`<div class="nav-label">${L(...m.group)}</div>`
         : html`<a href="#/${m.key === 'home' ? '' : m.key}" class="${route.module === m.key ? 'active' : ''}" data-nav>${icon(m.icon)}<span>${L(...m.name)}</span>${m.count && state.counts[m.count] ? html`<span class="count">${state.counts[m.count]}</span>` : ''}</a>`))}</nav>
       <div class="sidebar-foot">
-        ${aiEnabled() ? html`<div class="ai-pill" style="margin-top:4px" data-tip="Claude · ${state.meta?.ai?.model}"><span class="dot on"></span>${L('Claude 辅助已启用', 'Claude assistance on')}</div>` : ''}
-        <div style="margin-top:6px">${L('星海科技 · 演示数据', 'Xinghai Tech · demo data')}</div>
-        ${hasRole('hr') ? html`<div style="margin-top:6px"><a href="/api/export" download style="color:inherit">${L('导出数据', 'Export data')}</a>${state.meta?.demo ? html` · <a href="#" data-reset style="color:inherit">${L('重置演示数据', 'Reset demo')}</a>` : ''}</div>` : ''}
+        ${aiEnabled() ? html`<div class="mt-1 ai-pill" data-tip="Claude · ${state.meta?.ai?.model}"><span class="dot on"></span>${L('Claude 辅助已启用', 'Claude assistance on')}</div>` : ''}
+        <div class="mt-2">${L('星海科技 · 演示数据', 'Xinghai Tech · demo data')}</div>
+        ${hasRole('hr') ? html`<div class="mt-2"><a href="/api/export" download class="text-inherit">${L('导出数据', 'Export data')}</a>${state.meta?.demo ? html` · <a href="#" data-reset class="text-inherit">${L('重置演示数据', 'Reset demo')}</a>` : ''}</div>` : ''}
       </div>
     </aside>
     <div class="main">
@@ -79,6 +79,8 @@ async function confirmLeave() {
 function wireShell() {
   const app = appEl.querySelector('.app');
   appEl.querySelector('[data-menu]').addEventListener('click', () => app.classList.toggle('nav-open'));
+  // The dimmed area beside the open phone menu belongs to .app itself.
+  app.addEventListener('click', (e) => { if (e.target === app) app.classList.remove('nav-open'); });
   appEl.querySelectorAll('[data-nav]').forEach((a) => a.addEventListener('click', () => app.classList.remove('nav-open')));
   appEl.querySelector('[data-lang]').addEventListener('click', async () => {
     if (!(await confirmLeave())) return;
@@ -314,6 +316,11 @@ async function boot() {
     route();
     window.scrollTo(0, 0);
   });
+  // Rows that open a record work from the keyboard as well as the mouse.
+  document.addEventListener('keydown', (e) => {
+    const row = e.key === 'Enter' && e.target.matches?.('tr[data-href]') ? e.target : null;
+    if (row) location.hash = row.dataset.href;
+  });
   window.addEventListener('beforeunload', (e) => {
     if (!hasUnsavedChanges()) return;
     e.preventDefault();
@@ -335,7 +342,7 @@ function clearSession() {
   setLeaveGuard(null);
 }
 function loginView() {
-  setHTML(appEl, html`<div class="public-wrap" style="max-width:460px"><div class="row" style="margin-bottom:24px">${logo()}<strong>${L('知人', 'Zhiren')}</strong></div><section class="card"><h1>${L('登录', 'Sign in')}</h1><p class="muted">${L('请使用管理员配置的公司账号。', 'Use the company account configured by your administrator.')}</p><form id="login-form" style="margin-top:20px"><label class="field"><span class="field-label">${L('账号', 'Username')}</span><input class="input" name="username" autocomplete="username" maxlength="64" required></label><label class="field"><span class="field-label">${L('密码', 'Password')}</span><input class="input" type="password" name="password" autocomplete="current-password" maxlength="256" required></label><p class="form-error" role="alert" hidden></p><button class="btn btn-primary" type="submit">${L('登录', 'Sign in')}</button></form></section></div>`);
+  setHTML(appEl, html`<div class="public-wrap" style="max-width:460px"><div class="mb-6 row">${logo()}<strong>${L('知人', 'Zhiren')}</strong></div><section class="card"><h1>${L('登录', 'Sign in')}</h1><p class="muted">${L('请使用管理员配置的公司账号。', 'Use the company account configured by your administrator.')}</p><form id="login-form" class="mt-5"><label class="field"><span class="field-label">${L('账号', 'Username')}</span><input class="input" name="username" autocomplete="username" maxlength="64" required></label><label class="field"><span class="field-label">${L('密码', 'Password')}</span><input class="input" type="password" name="password" autocomplete="current-password" maxlength="256" required></label><p class="form-error" role="alert" hidden></p><button class="btn btn-primary" type="submit">${L('登录', 'Sign in')}</button></form></section></div>`);
   const form = appEl.querySelector('#login-form');
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -354,7 +361,7 @@ function loginView() {
 }
 function personalHome(view) {
   const me = state.employees.find(e => e.id === getActor());
-  setHTML(view, html`<h1>${L('我的工作台', 'My workspace')}</h1><p class="page-sub">${me ? personName(me) : getAuth().user.username} · ${roleName(getAuth().user.role)}</p><div class="card"><p>${L('员工敏感资料和工作记录仅显示你有权访问的范围。', 'Sensitive employee information and work records are limited to your access scope.')}</p><div class="row" style="margin-top:16px;flex-wrap:wrap"><a class="btn" href="#/service/people/${getActor()}">${L('我的资料', 'My profile')}</a><a class="btn" href="#/service/requests?f=mine">${L('我的服务申请', 'My requests')}</a><a class="btn" href="#/learning/idp">${L('发展计划', 'Development plans')}</a><a class="btn" href="#/recruit/pipeline">${L('分配给我的面试', 'Assigned interviews')}</a></div></div>`);
+  setHTML(view, html`<h1>${L('我的工作台', 'My workspace')}</h1><p class="page-sub">${me ? personName(me) : getAuth().user.username} · ${roleName(getAuth().user.role)}</p><div class="card"><p>${L('员工敏感资料和工作记录仅显示你有权访问的范围。', 'Sensitive employee information and work records are limited to your access scope.')}</p><div class="mt-4 flex-wrap row"><a class="btn" href="#/service/people/${getActor()}">${L('我的资料', 'My profile')}</a><a class="btn" href="#/service/requests?f=mine">${L('我的服务申请', 'My requests')}</a><a class="btn" href="#/learning/idp">${L('发展计划', 'Development plans')}</a><a class="btn" href="#/recruit/pipeline">${L('分配给我的面试', 'Assigned interviews')}</a></div></div>`);
 }
 
 // Lets views refresh the cached employee list after edits.

@@ -173,7 +173,7 @@ export const icon = (name, cls = '') => raw(
   `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`,
 );
 export const logo = () => raw(
-  '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#3d66e0"/><circle cx="16" cy="11" r="4.2" fill="#fff"/><path d="M7.5 25c1.2-5 4.6-7.6 8.5-7.6s7.3 2.6 8.5 7.6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="24.5" cy="8" r="2.2" fill="#a9c1ff"/></svg>',
+  '<svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="9" fill="#2f56d0"/><circle cx="16" cy="11" r="4.2" fill="#fff"/><path d="M7.5 25c1.2-5 4.6-7.6 8.5-7.6s7.3 2.6 8.5 7.6" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/><circle cx="24.5" cy="8" r="2.2" fill="#a9c1ff"/></svg>',
 );
 
 // ------------------------------------------------------------------ people & badges
@@ -210,7 +210,7 @@ export const input = (name, o = {}) => html`<input class="input" ${attrs({
   name, type: o.type || 'text', value: o.value ?? '', required: o.required, placeholder: o.placeholder, min: o.min, max: o.max,
   step: o.step, autofocus: o.autofocus, maxlength: o.maxlength, autocomplete: o.autocomplete || 'off', id: o.id, disabled: o.disabled, list: o.list,
 })}>`;
-export const textarea = (name, o = {}) => html`<textarea class="input ${o.mono ? 'mono' : ''}" ${attrs({ name, rows: o.rows || 4, required: o.required, placeholder: o.placeholder, maxlength: o.maxlength, id: o.id })}>${o.value ?? ''}</textarea>`;
+export const textarea = (name, o = {}) => html`<textarea class="input ${o.mono ? 'mono' : ''}" ${attrs({ name, rows: o.rows || 4, required: o.required, placeholder: o.placeholder, maxlength: o.maxlength, id: o.id, 'aria-label': o.ariaLabel })}>${o.value ?? ''}</textarea>`;
 export function select(name, options, o = {}) {
   return html`<select class="input" ${attrs({ name, required: o.required, id: o.id })}>${o.placeholder != null ? html`<option value="">${o.placeholder}</option>` : ''}${options.map((opt) => {
     const [value, label] = Array.isArray(opt) ? opt : [opt, opt];
@@ -343,7 +343,9 @@ export function modal({ title, body, submitLabel, cancelLabel, onSubmit, onOpen,
   const close = () => {
     if (closed) return;
     closed = true;
-    backdrop.remove();
+    // A short fade on the way out; it no longer blocks clicks while it plays.
+    backdrop.classList.add('closing');
+    setTimeout(() => backdrop.remove(), 120);
     document.removeEventListener('keydown', onKey);
     if (previous && previous.isConnected) previous.focus();
     onClose?.();
