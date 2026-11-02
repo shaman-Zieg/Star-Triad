@@ -45,19 +45,24 @@ async function idpView(el, ctx, d) {
   if (ctx.id) return idpDetail(el, ctx, d);
   if (ctx.query.emp) return idpNew(el, ctx, d);
   const emp = byId(d.employees);
-  const withIdp = new Set(d.idps.map((i) => i.employeeId));
+  // A finished plan is history; it should not stop the person getting a new one.
+  const withIdp = new Set(d.idps.filter((i) => i.status === 'active').map((i) => i.employeeId));
+  const rank = (i) => (i.status === 'active' ? 0 : 1);
+  const plans = [...d.idps].sort((a, b) => rank(a) - rank(b));
   setHTML(el, html`
     <div class="row-between" style="margin-bottom:12px">
       ${method('70-20-10：', L('70% 来自在岗实践与挑战任务，20% 来自导师、教练与反馈，10% 来自正式培训。', '70% from on-the-job challenges, 20% from mentors, coaching and feedback, 10% from formal training.'))}
-      ${hasRole('hr', 'manager') ? html`<div class="row"><select class="input" id="new-emp" style="width:auto" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id)).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>` : ''}
+      ${hasRole('hr', 'manager') ? html`<div class="row"><select class="input" id="new-emp" style="width:auto" aria-label="${L('选择员工', 'Choose employee')}"><option value="">${L('为员工新建 IDP…', 'New IDP for…')}</option>${d.active.filter((e) => !withIdp.has(e.id) && canEditPlan({ employeeId: e.id })).map((e) => html`<option value="${e.id}">${personName(e)} · ${loc(e, 'title')}</option>`)}</select></div>` : ''}
     </div>
     <section class="card card-flush">
-      ${d.idps.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('员工', 'Employee')}</th><th>${L('发展重点', 'Focus areas')}</th><th>${L('类型', 'Type')}</th><th>${L('进度', 'Progress')}</th><th>${L('创建', 'Created')}</th></tr></thead>
-        <tbody>${d.idps.map((i) => html`<tr class="clickable" data-href="#/learning/idp/${i.id}"><td>${personLink(emp[i.employeeId])}</td>
+      ${d.idps.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('员工', 'Employee')}</th><th>${L('发展重点', 'Focus areas')}</th><th>${L('类型', 'Type')}</th><th>${L('状态', 'Status')}</th><th>${L('进度', 'Progress')}</th><th>${L('创建', 'Created')}</th><th></th></tr></thead>
+        <tbody>${plans.map((i) => html`<tr class="clickable" data-href="#/learning/idp/${i.id}"><td>${personLink(emp[i.employeeId])}</td>
           <td>${(i.focus || []).map((f) => html`<span class="tag">${tx(compByKey[f.competency].name)}</span>`)}</td>
           <td>${badge(i.mode === 'growth' ? L('晋升准备', 'Next level') : i.mode === 'mastery' ? L('精进', 'Mastery') : L('补齐差距', 'Close gaps'), i.mode === 'gap' ? 'warn' : 'info')}</td>
+          <td>${badge(tx(IDP_STATUS[i.status]?.name || [i.status, i.status]), IDP_STATUS[i.status]?.tone)}</td>
           <td style="min-width:140px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${meter(idpProgress(i), 100, 'ok')}</div><span class="small num">${idpProgress(i)}%</span></div></td>
-          <td class="small">${fmt.date(i.createdAt)}</td></tr>`)}</tbody></table></div>` : empty(L('还没有发展计划', 'No development plans yet'), L('从右上角选择员工，系统将根据能力差距自动生成。', 'Pick an employee above; the plan is generated from their competency gaps.'), 'target')}
+          <td class="small">${fmt.date(i.createdAt)}</td>
+          <td>${canEditPlan(i) ? html`<a class="btn btn-sm" href="#/learning/idp/${i.id}?edit=1">${icon('edit')}${L('编辑', 'Edit')}</a>` : ''}</td></tr>`)}</tbody></table></div>` : empty(L('还没有发展计划', 'No development plans yet'), L('从右上角选择员工，系统将根据能力差距自动生成。', 'Pick an employee above; the plan is generated from their competency gaps.'), 'target')}
     </section>`);
   el.querySelector('#new-emp')?.addEventListener('change', (e) => { if (e.target.value) location.hash = `#/learning/idp?emp=${e.target.value}`; });
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
