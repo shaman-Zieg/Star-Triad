@@ -95,6 +95,11 @@ export function buildIDP(emp, courses = COURSE_CATALOG, startDate) {
   return { mode, focus };
 }
 
+export const ACTION_TYPES = {
+  70: ['在岗实践 70%', 'On the job 70%'],
+  20: ['向他人学习 20%', 'From others 20%'],
+  10: ['正式培训 10%', 'Formal 10%'],
+};
 export const IDP_STATUS = {
   active: { name: ['进行中', 'Active'], tone: 'info' },
   completed: { name: ['已完成', 'Completed'], tone: 'ok' },

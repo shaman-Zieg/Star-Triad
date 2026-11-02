@@ -6,7 +6,7 @@ import {
 } from '../core.js';
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel, assessCompetencies } from '../engine/competency.js';
-import { buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
+import { ACTION_TYPES, buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
 import { radar, heatmap, seqColor, hbars } from '../charts.js';
 import { mountReport } from '../ai.js';
 
@@ -16,7 +16,6 @@ const SUBS = [
   ['courses', ['课程与学习', 'Courses']],
   ['eval', ['培训效果评估', 'Evaluation']],
 ];
-const TYPE = { 70: ['在岗实践 70%', 'On the job 70%'], 20: ['向他人学习 20%', 'From others 20%'], 10: ['正式培训 10%', 'Formal 10%'] };
 
 export default async function learning(el, ctx) {
   const allowed = hasRole('hr', 'manager') ? SUBS : SUBS.filter(([key]) => ['idp', 'courses'].includes(key));
@@ -69,7 +68,7 @@ function planBlocks(focus, courses, { editable = false } = {}) {
     <p class="small"><strong>${L('SMART 目标：', 'SMART goal: ')}</strong>${L(`在 6 个月内将「${tx(compByKey[f.competency].name)}」提升到 ${f.target} 级，表现为：${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`, `Within 6 months, reach level ${f.target} in ${tx(compByKey[f.competency].name)}, shown by: ${tx(compByKey[f.competency].anchors[f.target >= 5 ? 5 : 3])}`)}</p>
     ${f.actions.map((a, ai) => html`<div class="list-item">
       ${editable ? html`<input type="checkbox" data-toggle="${fi}:${ai}" ${a.done ? 'checked' : ''} aria-label="${L('完成', 'Done')}">` : ''}
-      <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(TYPE[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}</div></div>
+      <div class="grow"><div style="${a.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${actionText(a, courses)}</div><div class="meta">${tx(ACTION_TYPES[a.type])} · ${L('截止', 'Due')} ${fmt.date(a.due)}</div></div>
       ${badge(a.type === '70' ? '70' : a.type === '20' ? '20' : '10', a.type === '70' ? 'brand' : '')}</div>`)}
   </section>`);
 }
