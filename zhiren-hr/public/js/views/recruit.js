@@ -314,7 +314,9 @@ async function moveStage(c, stage, d) {
   const saved = await act(null, () => api.put(`/api/candidates/${c.id}`, patch), L(`已移动到「${tx(STAGES[stage])}」`, `Moved to ${tx(STAGES[stage])}`));
   if (!saved) return false;
   if (stage === 'hired' && pos) {
-    const yes = await confirmDialog(L(`是否同时为 ${personName(c)} 创建员工档案和入职计划？`, `Also create an employee record and onboarding plan for ${personName(c)}?`), { title: L('录用成功', 'Hired'), confirmLabel: L('创建', 'Create') });
+    // Moving someone back and forth through the pipeline must not create a second record.
+    const onFile = d.employees.some((e) => e.fromCandidateId === c.id);
+    const yes = !onFile && await confirmDialog(L(`是否同时为 ${personName(c)} 创建员工档案和入职计划？`, `Also create an employee record and onboarding plan for ${personName(c)}?`), { title: L('录用成功', 'Hired'), confirmLabel: L('创建', 'Create') });
     if (yes) await act(null, () => createEmployeeFromCandidate(c, pos));
     const hiredCount = d.candidates.filter((x) => x.positionId === pos.id && (x.stage === 'hired' || x.id === c.id)).length;
     if (hiredCount >= pos.headcount && pos.status === 'open' && await confirmDialog(L('该职位招聘人数已满，是否关闭职位？', 'All openings are filled. Close the job?'), { confirmLabel: L('关闭职位', 'Close job') })) {
