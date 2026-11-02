@@ -195,13 +195,13 @@ export function idpEditor(el, { plan, emp, courses, people, intro, cancelHref, o
       const body = { focus: cleanFocus(draft.focus), period: draft.period.trim() };
       const saved = isNew
         ? await api.post('/api/idps', { ...body, employeeId: emp.id, status: 'active', mode: plan.mode, name: emp.name, nameEn: emp.nameEn })
-        : await api.put(`/api/idps/${plan.id}`, { ...body, status: draft.status });
+        : await api.put(`/api/idps/${plan.id}`, { ...body, status: draft.status, expectedUpdatedAt: plan.updatedAt });
       dirty = false;
       setLeaveGuard(null);
       toast(L('发展计划已保存', 'Plan saved'));
       onSaved(saved);
     } catch (err) {
-      toast(err.message, 'error');
+      toast(err.status === 409 ? (isNew ? L('该员工已有进行中的发展计划。', 'This employee already has an active plan.') : L('计划已被他人修改，或该员工已有其他进行中的计划。请记下修改内容，刷新页面后重试。', 'This plan was changed by someone else, or another plan is already active. Note your changes, reload and try again.')) : err.message, 'error');
     } finally {
       if (button.isConnected) button.disabled = false;
     }
