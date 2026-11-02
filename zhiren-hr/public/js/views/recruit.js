@@ -92,12 +92,14 @@ function positionForm(p, d, onSaved) {
       if (Boolean(Number(v.salaryMin)) !== Boolean(Number(v.salaryMax))) throw new Error(L('请同时填写月薪上下限，或都留空', 'Enter both pay limits or leave both blank'));
       const doc = {
         title: v.title.trim(), titleEn: v.titleEn.trim() || v.title.trim(), deptId: v.deptId, level: v.level, headcount: Number(v.headcount) || 1,
-        priority: v.priority, minYears: Number(v.minYears) || 0, maxYears: (Number(v.minYears) || 0) + 6, education: Number(v.education) || 0,
+        priority: v.priority, minYears: Number(v.minYears) || 0, // The form has no upper limit, so an edit keeps the stored one unless it no longer fits.
+        maxYears: p.maxYears >= (Number(v.minYears) || 0) ? p.maxYears : (Number(v.minYears) || 0) + 6, education: Number(v.education) || 0,
         location: v.location, salaryMin: Number(v.salaryMin) || null, salaryMax: Number(v.salaryMax) || null, hiringManagerId: v.hiringManagerId,
         skills: list(v.skills), niceSkills: list(v.niceSkills), status: v.status,
       };
       if (isNew) doc.openedAt = today();
       if (v.status === 'closed' && p.status !== 'closed') doc.closedAt = today();
+      if (v.status !== 'closed' && p.closedAt) doc.closedAt = null;
       const saved = isNew ? await api.post('/api/positions', doc) : await api.put(`/api/positions/${p.id}`, doc);
       toast(L('职位已保存', 'Job saved'));
       onSaved(saved);
