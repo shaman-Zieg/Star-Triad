@@ -83,7 +83,7 @@ export function list(col, filters = {}) {
     where.push(`json_extract(data, '$.${k}') = ?`);
     params.push(v);
   }
-  return open().prepare(`SELECT data FROM docs WHERE ${where.join(' AND ')} ORDER BY created_at, id`).all(...params).map((r) => JSON.parse(r.data));
+  return open().prepare(`SELECT data FROM docs WHERE ${where.join(' AND ')} ORDER BY created_at, rowid`).all(...params).map((r) => JSON.parse(r.data));
 }
 
 export function get(col, id) {
