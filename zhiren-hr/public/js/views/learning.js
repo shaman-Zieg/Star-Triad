@@ -124,7 +124,8 @@ async function idpDetail(el, ctx, d) {
     const [fi, ai] = cb.dataset.toggle.split(':').map(Number);
     const focus = structuredClone(idp.focus);
     focus[fi].actions[ai].done = cb.checked;
-    await act(null, () => api.put(`/api/idps/${idp.id}`, { focus }));
+    // Ticking sends the whole plan, so it must not bring back text that was edited since this page loaded.
+    await act(null, () => api.put(`/api/idps/${idp.id}`, { focus, expectedUpdatedAt: idp.updatedAt }));
     ctx.rerender();
   });
   on(el, 'click', '[data-status]', async (e, b) => {
