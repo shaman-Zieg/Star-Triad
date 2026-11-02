@@ -541,3 +541,13 @@ ul.tight li { margin: 2px 0; }
 /* ---------------------------------------------------------------- development plan editor */
 .form-grid .span-3 { grid-column: 1 / -1; }
 .idp-focus .field textarea { min-height: 60px; }
+.idp-action { display: grid; grid-template-columns: auto 150px minmax(0, 1fr) auto; gap: 8px 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.idp-action:last-of-type { border-bottom: 0; }
+.idp-action-text { display: grid; gap: 6px; min-width: 0; }
+.idp-action-meta { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.idp-action-meta label { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); white-space: nowrap; }
+.idp-action-meta .input { width: auto; max-width: 200px; }
+@media (max-width: 600px) {
+  .idp-action { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .idp-action-text { grid-column: 2 / -1; }
+}
