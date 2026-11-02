@@ -21,12 +21,12 @@ export default async function todos(el, ctx) {
   setHTML(el, html`
     ${pageHead(L('我的待办', 'My tasks'), actor ? L(`${personName(actor)}，这里是仍需你处理的事项。`, `${personName(actor)}, here is the work that needs your attention.`) : '', html`<button class="btn" type="button" data-refresh>${icon('refresh')}${L('刷新', 'Refresh')}</button>`)}
     ${callout('info', L('仅显示你有权查看且由你负责的事项。留任评估在到期前 30 天出现；服务请求按工作日时效排序。进入详情完成后，待办会自动移除。', 'Only work you can access and are responsible for appears here. Retention reviews appear 30 days before their deadline; service requests use working-day SLAs. Complete work in its detail page to clear it from this list.'))}
-    <div class="grid cols-4" style="margin:16px 0">
+    <div class="my-4 grid cols-4">
       ${Object.entries(TODO_CATEGORIES).map(([key, meta]) => html`<a class="card kpi tool-card" href="${queueLink(key)}" aria-current="${category === key ? 'page' : 'false'}"><span class="label">${icon(meta.icon)}${tx(meta.name)}</span><strong class="value">${summary.categories[key]}</strong><span class="sub">${L('查看待办', 'View tasks')}</span></a>`)}
     </div>
-    <div class="row-between" style="margin-bottom:14px">
+    <div class="mb-3 row-between">
       <div class="row"><h2>${category === 'all' ? L('全部待办', 'All tasks') : tx(TODO_CATEGORIES[category].name)}</h2>${badge(L(`${visible.length} 项`, `${visible.length} tasks`))}${category !== 'all' || bucket !== 'all' ? html`<a class="btn btn-sm" href="#/todos">${L('显示全部', 'Show all')}</a>` : ''}</div>
-      <label class="row small">${L('时间', 'Due')}<select class="input" style="width:auto" id="todo-when"><option value="all">${L('全部日期', 'All dates')}</option>${Object.entries(TODO_BUCKETS).map(([key, meta]) => html`<option value="${key}" ${key === bucket ? 'selected' : ''}>${tx(meta.name)}</option>`)}</select></label>
+      <label class="row small">${L('时间', 'Due')}<select class="w-auto input" id="todo-when"><option value="all">${L('全部日期', 'All dates')}</option>${Object.entries(TODO_BUCKETS).map(([key, meta]) => html`<option value="${key}" ${key === bucket ? 'selected' : ''}>${tx(meta.name)}</option>`)}</select></label>
     </div>
     <div class="stack">${visible.length ? Object.entries(TODO_BUCKETS).map(([key, meta]) => {
       const group = visible.filter(item => item.bucket === key);

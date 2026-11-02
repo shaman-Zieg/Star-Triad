@@ -66,15 +66,15 @@ export default async function toolkit(el, ctx) {
   const cat = ctx.query.cat || '';
   setHTML(el, html`
     ${pageHead(L('HR 工具箱', 'HR toolkit'), L('经典 HR 方法论的要点与常见误区，每一条都连接到可直接使用的工具；以及常用的合规与测算计算器。', 'The essentials and common pitfalls of proven HR methods, each linked to a working tool, plus everyday compliance and planning calculators.'))}
-    <section class="card" style="margin-bottom:16px"><div class="card-head"><div><h2>${L('计算器', 'Calculators')}</h2><p>${L('计算规则依据国家层面规定，地方政策可能不同', 'Rules follow national PRC regulations; local rules may differ')}</p></div></div>
+    <section class="mb-4 card"><div class="card-head"><div><h2>${L('计算器', 'Calculators')}</h2><p>${L('计算规则依据国家层面规定，地方政策可能不同', 'Rules follow national PRC regulations; local rules may differ')}</p></div></div>
       <div class="grid cols-4">${CALCS.map(([k, ic, n, p]) => html`<a class="card tool-card" href="#/toolkit/${k}"><span class="ico">${icon(ic)}</span><strong>${tx(n)}</strong><p>${tx(p)}</p></a>`)}</div></section>
-    <div class="row-between" style="margin-bottom:12px"><h2 style="font-size:16px">${L('方法论库', 'Method library')}</h2>
+    <div class="mb-3 row-between"><h2 class="text-md">${L('方法论库', 'Method library')}</h2>
       <div class="seg"><button type="button" class="${!cat ? 'on' : ''}" data-cat="">${L('全部', 'All')}</button>${Object.entries(CATS).map(([k, v]) => html`<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${tx(v)}</button>`)}</div></div>
     <div class="grid cols-2">${METHODS.filter((m) => !cat || m.cat === cat).map((m) => html`<section class="card">
       <div class="card-head"><div><h2>${tx(m.name)}</h2></div>${badge(tx(CATS[m.cat]), 'brand')}</div>
       <p class="small">${tx(m.what)}</p>
-      <ol class="small" style="padding-left:18px;margin:6px 0">${m.steps.map((s) => html`<li>${tx(s)}</li>`)}</ol>
-      <div class="callout callout-warn small" style="margin:8px 0">${icon('alert')}<div>${L('常见误区：', 'Pitfall: ')}${tx(m.pitfall)}</div></div>
+      <ol class="list-plain my-2 small">${m.steps.map((s) => html`<li>${tx(s)}</li>`)}</ol>
+      <div class="my-2 callout callout-warn small">${icon('alert')}<div>${L('常见误区：', 'Pitfall: ')}${tx(m.pitfall)}</div></div>
       ${m.href ? html`<a class="btn btn-sm" href="${m.href}">${L('打开工具', 'Open the tool')} ${icon('chevron-right')}</a>` : html`<span class="small muted">${L('方法参考，暂无对应工具', 'Reference only; no matching tool')}</span>`}</section>`)}</div>`);
   on(el, 'click', '[data-cat]', (e, b) => { location.hash = `#/toolkit${b.dataset.cat ? `?cat=${b.dataset.cat}` : ''}`; });
 }
@@ -134,8 +134,8 @@ async function calculator(el, key) {
   };
   setHTML(el, html`${pageHead(tx(name), tx(desc))}
     <a href="#/toolkit" class="small">← ${L('工具箱', 'Toolkit')}</a>
-    <div class="split-wide" style="margin-top:10px">
-      <section class="card"><form id="calc" class="stack" style="gap:12px">${live && liveNote ? callout('info', liveNote) : ''}${F[key]}</form></section>
+    <div class="mt-3 split-wide">
+      <section class="card"><form id="calc" class="gap-3 stack">${live && liveNote ? callout('info', liveNote) : ''}${F[key]}</form></section>
       <section class="card" id="out"></section>
     </div>`);
   const form = el.querySelector('#calc');
@@ -146,39 +146,39 @@ async function calculator(el, key) {
     let content;
     if (key === 'leave') {
       const r = annualLeave(v);
-      content = html`<div class="row" style="gap:28px">${big(L('全年应休', 'Full-year entitlement'), L(`${r.full} 天`, `${r.full} days`))}${big(L('本年度可休', 'This year'), L(`${r.days} 天`, `${r.days} days`), 'brand-text')}</div>
+      content = html`<div class="gap-6 row">${big(L('全年应休', 'Full-year entitlement'), L(`${r.full} 天`, `${r.full} days`))}${big(L('本年度可休', 'This year'), L(`${r.days} 天`, `${r.days} days`), 'brand-text')}</div>
         ${r.prorated ? callout('info', L('本年度新入职，按剩余日历天数折算：（剩余天数 ÷ 365）× 全年天数，不足 1 天的部分不计。', 'Joined this year, so pro-rated: (remaining days / 365) × entitlement, fractions dropped.')) : ''}
         ${method(L('规则：', 'Rule:'), L('累计工作满 1 年不满 10 年 5 天；满 10 年不满 20 年 10 天；满 20 年 15 天（《职工带薪年休假条例》）。', '1 to <10 years: 5 days; 10 to <20 years: 10 days; 20+ years: 15 days (PRC Regulations on Paid Annual Leave).'))}`;
     } else if (key === 'overtime') {
       const r = overtimePay(v);
-      content = html`<div class="row" style="gap:28px">${big(L('小时工资', 'Hourly rate'), fmt.money(r.hourly))}${big(L('加班费合计', 'Total overtime pay'), fmt.money(r.total), 'brand-text')}</div>
+      content = html`<div class="gap-6 row">${big(L('小时工资', 'Hourly rate'), fmt.money(r.hourly))}${big(L('加班费合计', 'Total overtime pay'), fmt.money(r.total), 'brand-text')}</div>
         ${hbars([{ label: L('工作日 150%', 'Weekday 150%'), value: r.parts.weekday }, { label: L('休息日 200%', 'Rest day 200%'), value: r.parts.restday }, { label: L('法定节假日 300%', 'Holiday 300%'), value: r.parts.holiday }], { format: fmt.money, table: false })}
         ${method(L('规则：', 'Rule:'), L('小时工资 = 月工资 ÷ 21.75 ÷ 8。休息日加班优先安排补休；法定节假日加班不能以补休替代。', 'Hourly = monthly / 21.75 / 8. Rest-day work may be compensated with time off instead; public-holiday work cannot.'))}`;
     } else if (key === 'band') {
       const b = salaryBand(v);
       const c = compaRatio({ salary: v.salary, midpoint: b.mid, min: b.min, max: b.max });
       const pos = { below: [L('低于中位', 'Below midpoint'), 'warn'], at: [L('接近中位', 'Near midpoint'), 'ok'], above: [L('高于中位', 'Above midpoint'), 'info'] }[c.position] || ['—', ''];
-      content = html`<div class="row" style="gap:28px">${big(L('最小值', 'Min'), fmt.money(b.min))}${big(L('中位值', 'Mid'), fmt.money(b.mid))}${big(L('最大值', 'Max'), fmt.money(b.max))}</div>
-        <div class="row" style="gap:28px;margin-top:12px">${big(L('比较比率', 'Compa-ratio'), c.compa ?? '—', 'brand-text')}${big(L('带宽渗透率', 'Range penetration'), c.penetration != null ? `${c.penetration}%` : '—')}<div>${badge(pos[0], pos[1])}</div></div>
+      content = html`<div class="gap-6 row">${big(L('最小值', 'Min'), fmt.money(b.min))}${big(L('中位值', 'Mid'), fmt.money(b.mid))}${big(L('最大值', 'Max'), fmt.money(b.max))}</div>
+        <div class="gap-6 mt-3 row">${big(L('比较比率', 'Compa-ratio'), c.compa ?? '—', 'brand-text')}${big(L('带宽渗透率', 'Range penetration'), c.penetration != null ? `${c.penetration}%` : '—')}<div>${badge(pos[0], pos[1])}</div></div>
         ${c.compa != null && c.compa < 0.9 ? callout('warn', L('比较比率低于 0.9，存在保留风险，建议纳入调薪评审。', 'Compa-ratio below 0.9 is a retention risk; include in the pay review.')) : ''}
         ${method(L('解读：', 'Reading it:'), L('比较比率 = 薪酬 ÷ 中位值。0.9-1.1 为合理区间；新晋员工通常在 0.8-0.95，成熟胜任者在 1.0 附近。', 'Compa-ratio = pay ÷ midpoint. 0.9-1.1 is typical; new-in-role people sit around 0.8-0.95, fully proficient ones near 1.0.'))}`;
     } else if (key === 'turnover') {
       const r = turnover(v);
-      content = html`<div class="row" style="gap:28px">${big(L('期间离职率', 'Period turnover'), `${r.rate}%`)}${big(L('年化离职率', 'Annualized'), `${r.annualized}%`, r.annualized > 20 ? 'danger' : 'brand-text')}${big(L('主动离职占比', 'Voluntary share'), r.voluntaryShare != null ? `${r.voluntaryShare}%` : '—')}</div>
-        <div style="margin-top:12px">${big(L('估算离职成本', 'Estimated cost of turnover'), fmt.money(r.cost), 'danger')}</div>
+      content = html`<div class="gap-6 row">${big(L('期间离职率', 'Period turnover'), `${r.rate}%`)}${big(L('年化离职率', 'Annualized'), `${r.annualized}%`, r.annualized > 20 ? 'danger' : 'brand-text')}${big(L('主动离职占比', 'Voluntary share'), r.voluntaryShare != null ? `${r.voluntaryShare}%` : '—')}</div>
+        <div class="mt-3">${big(L('估算离职成本', 'Estimated cost of turnover'), fmt.money(r.cost), 'danger')}</div>
         ${method(L('公式：', 'Formula:'), L('离职率 = 离职人数 ÷ 平均人数（期初与期末的平均）。离职成本含招聘、培训、产出损失等，常按年薪的 0.5-2 倍估算。', 'Turnover = leavers ÷ average headcount (start and end). Turnover cost covers hiring, training and lost output, often 0.5-2× annual salary.'))}`;
     } else if (key === 'funnel') {
       const r = recruitingFunnel({ hires: v.hires, rates: v, costs: v.costs });
       const names = { applied: L('需收简历', 'Applicants'), screen: L('初筛通过', 'Screened'), interview: L('进入面试', 'Interviewed'), offer: L('发出 Offer', 'Offers'), hired: L('录用', 'Hires') };
       content = html`${r.blocked.length ? callout('warn', L('有转化率为 0 或无效，按此无法招到人；下方数字未计入这些环节，请填写大于 0 的比例。', 'A conversion rate is zero or invalid, so no hires can result; the figures below ignore those steps. Enter a rate above 0.')) : ''}${hbars(r.stages.map((s, i) => ({ label: names[s.stage], value: s.count, cls: `seq-${i + 1}` })), { table: false })}
-        <div class="row" style="gap:28px;margin-top:12px">${big(L('人均招聘成本', 'Cost per hire'), r.costPerHire != null ? fmt.money(r.costPerHire) : '—', 'brand-text')}</div>
+        <div class="gap-6 mt-3 row">${big(L('人均招聘成本', 'Cost per hire'), r.costPerHire != null ? fmt.money(r.costPerHire) : '—', 'brand-text')}</div>
         ${method(L('用法：', 'Use:'), L('用历史转化率倒推需要的简历量，判断渠道投入是否足够；转化率异常低的环节就是优化重点。', 'Use historical conversion rates to size sourcing; the stage with an unusually low rate is where to improve.'))}`;
     } else {
       const r = headcountPlan(v);
-      content = html`<div class="row" style="gap:28px">${big(L('目标人数', 'Target headcount'), r.target)}${big(L('预计离职', 'Expected leavers'), r.leavers)}${big(L('需招聘', 'Hires needed'), r.hires, 'brand-text')}</div>
+      content = html`<div class="gap-6 row">${big(L('目标人数', 'Target headcount'), r.target)}${big(L('预计离职', 'Expected leavers'), r.leavers)}${big(L('需招聘', 'Hires needed'), r.hires, 'brand-text')}</div>
         ${method(L('公式：', 'Formula:'), L('需招聘 = 目标人数 − 当前人数 + 平均人数 × 离职率。别忘了为关键岗位预留继任与培养周期。', 'Hires = target − current + average headcount × attrition. Allow lead time for key-role succession and ramp-up.'))}`;
     }
-    setHTML(out, html`<div class="card-head"><h2>${L('结果', 'Result')}</h2></div><div class="stack" style="gap:12px">${content}</div>`);
+    setHTML(out, html`<div class="card-head"><h2>${L('结果', 'Result')}</h2></div><div class="gap-3 stack">${content}</div>`);
   };
   form.addEventListener('input', render);
   render();
