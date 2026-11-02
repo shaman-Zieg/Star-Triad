@@ -15,7 +15,7 @@ export function openEmployeeImport(onSaved) {
   const dialog = modal({
     title: L('批量新增员工', 'Import new employees'), wide: true,
     submitLabel: L('预览并校验', 'Preview and validate'),
-    body: html`<div class="stack" style="gap:12px">
+    body: html`<div class="gap-3 stack">
       ${callout('info', L('仅新增，最多 500 行、1 MB。必需列：姓名、职位、部门、入职日期（YYYY-MM-DD）；每行还须填写工号或邮箱，用于防止重复导入。英文列名也可使用 name、title、deptId、hireDate、empNo、email。预览不会保存，确认后才会整批新增。', 'Add only: up to 500 rows and 1 MB. Required columns: name, title, deptId, hireDate (YYYY-MM-DD); every row also needs an employee number (empNo) or email to prevent duplicate imports. Chinese headers are accepted. Preview does not save; confirmation imports the whole batch.'))}
       <button class="btn" type="button" data-template>${L('下载 CSV 模板', 'Download CSV template')}</button>
       <label class="field"><span class="field-label">${L('选择 CSV 文件', 'Choose a CSV file')}</span><input class="input" type="file" name="csvFile" accept=".csv,text/csv"></label>
@@ -45,7 +45,7 @@ export function openEmployeeImport(onSaved) {
           ${result.rows.length ? html`<div class="table-wrap" style="max-height:360px;overflow:auto;margin-top:12px"><table class="table"><thead><tr>
             ${[L('行', 'Line'), L('姓名', 'Name'), L('职位', 'Title'), L('部门 ID', 'Department ID'), L('入职日期', 'Hire date'), L('工号 / 邮箱', 'Number / email'), L('校验及完整数据', 'Validation and full record')].map(label => html`<th>${label}</th>`)}</tr></thead><tbody>
             ${result.rows.map(row => html`<tr><td>${row.line}</td><td>${row.employee.name}</td><td>${row.employee.title}</td><td>${row.employee.deptId}</td><td>${row.employee.hireDate}</td><td>${row.employee.empNo || '—'}<br>${row.employee.email || '—'}</td><td>
-              ${row.errors.length ? html`<ul style="color:var(--danger)">${row.errors.map(error => html`<li>${error}</li>`)}</ul>` : L('通过', 'Valid')}
+              ${row.errors.length ? html`<ul class="text-danger">${row.errors.map(error => html`<li>${error}</li>`)}</ul>` : L('通过', 'Valid')}
               <details><summary>${L('查看所有字段', 'All fields')}</summary><dl class="kv">${Object.entries(row.employee).filter(([key]) => labels[key]).map(([key, value]) => html`<dt>${L(...labels[key])}</dt><dd>${Array.isArray(value) ? value.join('; ') || '—' : value ?? '—'}</dd>`)}</dl></details></td></tr>`)}
           </tbody></table></div>` : ''}`);
         button.textContent = result.valid ? L('确认导入', 'Confirm import') : L('重新预览并校验', 'Preview and validate again');

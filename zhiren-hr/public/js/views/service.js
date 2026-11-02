@@ -98,14 +98,14 @@ async function peopleView(el, ctx) {
   const emp = byId(d.employees);
   const rows = d.employees.filter((e) => (status === 'all' || e.status === status) && (!dept || e.deptId === dept) && (!q || `${e.name} ${e.nameEn} ${e.title} ${e.titleEn} ${e.empNo || ''}`.toLowerCase().includes(q)));
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
-      <div class="row"><input class="input" type="search" id="q" value="${ctx.query.q || ''}" placeholder="${L('姓名、职位、工号', 'Name, title, ID')}" style="width:220px">
-        <select class="input" id="dept" style="width:auto"><option value="">${L('全部部门', 'All departments')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === dept ? 'selected' : ''}>${loc(x)}</option>`)}</select>
+    <div class="mb-3 row-between">
+      <div class="row"><input class="input" type="search" id="q" value="${ctx.query.q || ''}" placeholder="${L('姓名、职位、工号', 'Name, title, ID')}" aria-label="${L('搜索员工', 'Search people')}" style="width:220px">
+        <select class="w-auto input" id="dept" aria-label="${L('部门', 'Department')}"><option value="">${L('全部部门', 'All departments')}</option>${d.departments.map((x) => html`<option value="${x.id}" ${x.id === dept ? 'selected' : ''}>${loc(x)}</option>`)}</select>
         <div class="seg">${[['active', L('在职', 'Active')], ['left', L('已离职', 'Left')], ['all', L('全部', 'All')]].map(([k, n]) => html`<button type="button" class="${status === k ? 'on' : ''}" data-status="${k}">${n}</button>`)}</div></div>
       ${hasRole('hr') ? html`<div class="row"><button class="btn" type="button" data-import-employees>${icon('upload')}${L('批量导入', 'Import CSV')}</button><button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新增员工', 'Add employee')}</button></div>` : ''}</div>
     <section class="card card-flush"><div class="table-wrap"><table class="table">
       <thead><tr><th>${L('员工', 'Employee')}</th><th>${L('部门', 'Department')}</th><th>${L('职级', 'Level')}</th><th>${L('地点', 'Location')}</th><th>${L('司龄', 'Tenure')}</th><th>${L('直属上级', 'Manager')}</th></tr></thead>
-      <tbody>${rows.map((e) => html`<tr class="clickable" data-href="#/service/people/${e.id}"><td>${personLink(e)}</td><td>${loc(d.departments.find((x) => x.id === e.deptId))}</td><td>${e.level}</td>
+      <tbody>${rows.map((e) => html`<tr class="clickable" tabindex="0" data-href="#/service/people/${e.id}"><td>${personLink(e)}</td><td>${loc(d.departments.find((x) => x.id === e.deptId))}</td><td>${e.level}</td>
         <td>${tx(LOCATIONS[e.location] || [e.location, e.location])}</td><td class="small">${e.status === 'left' ? html`${badge(L('已离职', 'Left'))} ${fmt.date(e.leaveDate)}` : fmt.tenure(e.hireDate)}</td><td>${personName(emp[e.managerId])}</td></tr>`)}</tbody></table></div>
       ${rows.length ? '' : empty(L('没有匹配的员工', 'No matching people'), '', 'users')}</section>`);
   const go = (patch) => {
@@ -124,7 +124,7 @@ async function peopleView(el, ctx) {
 async function profile(el, ctx, d) {
   const e = d.employees.find((x) => x.id === ctx.id);
   if (!e) return setHTML(el, empty(L('员工不存在', 'Person not found'), '', 'alert'));
-  if (e.restricted) return setHTML(el, html`<a href="#/service/people" class="small">← ${L('员工档案', 'Directory')}</a><section class="card" style="margin-top:12px"><div class="row">${avatar(e, 'lg')}<div><h2>${personName(e)}</h2><p>${loc(e, 'title')} · ${loc(d.departments.find(x => x.id === e.deptId))}</p><p>${e.email || ''}</p></div></div><p class="muted" style="margin-top:16px">${L('此处显示通讯录信息。敏感资料仅对本人、所属管理范围和 HR 开放。', 'Directory information only. Sensitive records are available to the employee, authorized managers and HR.')}</p></section>`);
+  if (e.restricted) return setHTML(el, html`<a href="#/service/people" class="small">← ${L('员工档案', 'Directory')}</a><section class="mt-3 card"><div class="row">${avatar(e, 'lg')}<div><h2>${personName(e)}</h2><p>${loc(e, 'title')} · ${loc(d.departments.find(x => x.id === e.deptId))}</p><p>${e.email || ''}</p></div></div><p class="mt-4 muted">${L('此处显示通讯录信息。敏感资料仅对本人、所属管理范围和 HR 开放。', 'Directory information only. Sensitive records are available to the employee, authorized managers and HR.')}</p></section>`);
   const more = await load('enrollments', 'courses', 'idps', 'tickets', 'onboarding');
   const emp = byId(d.employees);
   const reports = d.employees.filter((x) => x.managerId === e.id && x.status !== 'left');
@@ -139,8 +139,8 @@ async function profile(el, ctx, d) {
   const ob = more.onboarding.find((x) => x.employeeId === e.id);
   const courseBy = byId(more.courses);
   setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px">
-      <div class="row">${avatar(e, 'lg')}<div><a href="#/service/people" class="small">← ${L('员工档案', 'Directory')}</a><h2 style="font-size:20px">${personName(e)} ${e.status === 'left' ? badge(L('已离职', 'Left')) : ''}</h2>
+    <div class="mb-3 row-between">
+      <div class="row">${avatar(e, 'lg')}<div><a href="#/service/people" class="small">← ${L('员工档案', 'Directory')}</a><h2 class="title-sm">${personName(e)} ${e.status === 'left' ? badge(L('已离职', 'Left')) : ''}</h2>
         <div class="muted">${loc(e, 'title')} · ${loc(d.departments.find((x) => x.id === e.deptId))} · ${e.level}</div>
         <div class="small muted">${e.empNo || ''} · ${e.email || ''} · ${e.phone || ''}</div></div></div>
       <button class="btn" type="button" data-edit>${icon('edit')}${L('编辑档案', 'Edit')}</button></div>
@@ -153,15 +153,15 @@ async function profile(el, ctx, d) {
           <dt>${L('上次晋升', 'Last promotion')}</dt><dd>${fmt.date(e.lastPromotion)}</dd>
           ${e.status === 'left' ? html`<dt>${L('离职', 'Left')}</dt><dd>${fmt.date(e.leaveDate)} · ${tx(LEAVE_REASONS[e.leaveReason] || ['—', '—'])}</dd>` : ''}</dl>
         ${(e.skills || []).length ? html`<div class="section-title">${L('技能标签', 'Skills')}</div><div>${e.skills.map((s) => html`<span class="tag">${skillLabel(s, lang())}</span>`)}</div>` : ''}
-        ${reports.length ? html`<div class="section-title">${L('团队成员', 'Team')}</div>${reports.map((r) => html`<div style="margin:6px 0">${personLink(r)}</div>`)}` : ''}</section>
+        ${reports.length ? html`<div class="section-title">${L('团队成员', 'Team')}</div>${reports.map((r) => html`<div class="my-2">${personLink(r)}</div>`)}` : ''}</section>
       <section class="card"><div class="card-head"><h2>${L('人才画像', 'Talent profile')}</h2><a class="btn btn-sm" href="#/talent/competency?emp=${e.id}">${L('详情', 'Details')}</a></div>
-        <div class="row" style="margin-bottom:8px">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('待评估', 'Not assessed'))}${badge(`${L('绩效', 'Perf')} ${e.performance ?? '—'} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential ?? '—'}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
+        <div class="mb-2 row">${b ? badge(`${b.no} · ${tx(b.name)}`, b.tone === 'neutral' ? '' : b.tone) : badge(L('待评估', 'Not assessed'))}${badge(`${L('绩效', 'Perf')} ${e.performance ?? '—'} · ${tx(PERF_SCALE[e.performance] || ['', ''])}`)}${badge(`${L('潜力', 'Pot')} ${e.potential ?? '—'}`)}${risk ? badge(`${L('流失风险', 'Flight risk')} ${tx(RISK_LEVEL[risk.level][0])}`, RISK_LEVEL[risk.level][1]) : ''}</div>
         ${radar({ axes: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), series: [{ name: L('当前', 'Current'), values: e.competencies || {}, cls: 's1' }, { name: L('目标', 'Target'), values: targetProfile(e.level), cls: 's2' }], size: 280 })}</section>
       <div class="stack">
         <section class="card"><div class="card-head"><h2>${L('学习发展', 'Learning')}</h2><div class="row">${idp ? html`<a class="btn btn-sm" href="#/learning/idp/${idp.id}">IDP ${idpProgress(idp)}%</a>` : ''}${!currentIdp && e.status !== 'left' && canEditPlan({ employeeId: e.id }) ? html`<a class="btn btn-sm" href="#/learning/idp?emp=${e.id}">${L('创建 IDP', 'Create IDP')}</a>` : ''}</div></div>
           ${enrolls.length ? enrolls.map((x) => html`<div class="list-item"><div class="grow"><div>${loc(courseBy[x.courseId], 'title')}</div></div>${badge(tx(ENROLL_STATUS[x.status][0]), ENROLL_STATUS[x.status][1])}</div>`) : html`<p class="muted small">${L('暂无学习记录', 'No courses yet')}</p>`}</section>
         <section class="card"><div class="card-head"><h2>${L('服务申请', 'Requests')}</h2></div>
-          ${tickets.length ? tickets.map((t) => html`<a class="list-item" href="#/service/requests/${t.id}" style="color:inherit;text-decoration:none"><div class="grow"><div>${loc(t, 'title')}</div><div class="meta">${fmt.date(t.createdAt)}</div></div>${statusBadge(t.status)}</a>`) : html`<p class="muted small">${L('暂无申请', 'No requests')}</p>`}</section>
+          ${tickets.length ? tickets.map((t) => html`<a class="text-inherit plain-link list-item" href="#/service/requests/${t.id}"><div class="grow"><div>${loc(t, 'title')}</div><div class="meta">${fmt.date(t.createdAt)}</div></div>${statusBadge(t.status)}</a>`) : html`<p class="muted small">${L('暂无申请', 'No requests')}</p>`}</section>
         ${ob ? html`<section class="card"><div class="card-head"><h2>${L('入职进度', 'Onboarding')}</h2><a class="btn btn-sm" href="#/service/onboarding/${ob.id}">${L('查看', 'Open')}</a></div>${meter(ob.tasks.filter((t) => t.done).length, ob.tasks.length, 'ok')}</section>` : ''}
       </div>
     </div>`);
@@ -172,7 +172,7 @@ async function profile(el, ctx, d) {
 function newRequest(prefill = {}, onSaved) {
   modal({
     title: L('发起服务申请', 'New request'),
-    body: html`<div class="stack" style="gap:12px">
+    body: html`<div class="gap-3 stack">
       ${field(L('类型', 'Type'), select('type', Object.entries(TICKET_TYPES).map(([k, v]) => [k, `${tx(v.name)} · ${L(`${v.sla} 个工作日`, `${v.sla} working days`)}`]), { value: prefill.type || 'other' }))}
       ${field(L('标题', 'Subject'), input('title', { value: prefill.title, required: true, maxlength: 120 }))}
       ${field(L('详细说明', 'Details'), textarea('detail', { rows: 5, value: prefill.detail, maxlength: 2000 }))}</div>`,
@@ -197,20 +197,20 @@ async function requestsView(el, ctx) {
   const resolved = d.tickets.filter((t) => t.status === 'resolved' && t.resolvedAt);
   const onTime = resolved.filter((t) => t.resolvedAt <= dueDate(t.createdAt, TICKET_TYPES[t.type]?.sla || 3)).length;
   setHTML(el, html`
-    <div class="grid cols-4" style="margin-bottom:16px">
+    <div class="mb-4 grid cols-4">
       <div class="card kpi"><span class="label">${L('待处理', 'Open')}</span><span class="value">${d.tickets.filter((t) => t.status === 'open').length}</span></div>
       <div class="card kpi"><span class="label">${L('处理中', 'In progress')}</span><span class="value">${d.tickets.filter((t) => t.status === 'in_progress').length}</span></div>
-      <div class="card kpi"><span class="label">${L('已超时', 'Past SLA')}</span><span class="value" style="color:var(--danger)">${d.tickets.filter((t) => isOverdue(t, T)).length}</span></div>
+      <div class="card kpi"><span class="label">${L('已超时', 'Past SLA')}</span><span class="text-danger value">${d.tickets.filter((t) => isOverdue(t, T)).length}</span></div>
       <div class="card kpi"><span class="label">${L('按时解决率', 'Resolved on time')}</span><span class="value">${resolved.length ? fmt.pct(onTime / resolved.length) : '—'}</span></div>
     </div>
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="seg">${[['active', L('未完成', 'Active')], ['overdue', L('已超时', 'Overdue')], ['mine', L('我提交的', 'Mine')], ['all', L('全部', 'All')]].map(([k, n]) => html`<button type="button" class="${f === k ? 'on' : ''}" data-f="${k}">${n}</button>`)}</div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('发起申请', 'New request')}</button></div>
     <section class="card card-flush">${rows.length ? html`<div class="table-wrap"><table class="table">
       <thead><tr><th>${L('申请', 'Request')}</th><th>${L('类型', 'Type')}</th><th>${L('申请人', 'From')}</th><th>${L('处理人', 'Owner')}</th><th>${L('时限', 'Due')}</th><th>${L('状态', 'Status')}</th></tr></thead>
       <tbody>${rows.map((t) => {
         const due = dueDate(t.createdAt, TICKET_TYPES[t.type]?.sla || 3);
-        return html`<tr class="clickable" data-href="#/service/requests/${t.id}"><td><a href="#/service/requests/${t.id}"><strong>${loc(t, 'title')}</strong></a><div class="small muted">${fmt.rel(t.createdAt)}</div></td><td>${typeBadge(t.type)}</td>
+        return html`<tr class="clickable" tabindex="0" data-href="#/service/requests/${t.id}"><td><a href="#/service/requests/${t.id}"><strong>${loc(t, 'title')}</strong></a><div class="small muted">${fmt.rel(t.createdAt)}</div></td><td>${typeBadge(t.type)}</td>
           <td>${personName(emp[t.requesterId])}</td><td>${t.assigneeId ? personName(emp[t.assigneeId]) : html`<span class="muted">${L('未分配', 'Unassigned')}</span>`}</td>
           <td class="small">${t.status === 'resolved' ? '—' : isOverdue(t, T) ? badge(L(`超时 ${daysBetween(due, T)} 天`, `${daysBetween(due, T)} d late`), 'danger') : fmt.date(due)}</td><td>${statusBadge(t.status)}</td></tr>`;
       })}</tbody></table></div>` : empty(L('没有申请', 'No requests'), '', 'inbox')}</section>`);
@@ -231,19 +231,19 @@ async function ticketDetail(el, ctx, d, emp) {
   const hr = [...(hrStaff.length ? hrStaff : active), ...(emp[t.assigneeId] && !hrStaff.includes(emp[t.assigneeId]) ? [emp[t.assigneeId]] : [])];
   setHTML(el, html`
     <a href="#/service/requests" class="small">← ${L('全部申请', 'All requests')}</a>
-    <div class="split" style="margin-top:8px">
+    <div class="mt-2 split">
       <section class="card"><div class="card-head"><div><h2>${loc(t, 'title')}</h2><p>${typeBadge(t.type)} · ${fmt.stamp(t.createdAt)}</p></div>${statusBadge(t.status)}</div>
-        <div class="list-item" style="align-items:flex-start">${avatar(emp[t.requesterId] || { name: '?' }, 'sm')}<div class="grow"><strong>${personName(emp[t.requesterId])}</strong><div style="white-space:pre-wrap;margin-top:4px">${loc(t, 'detail') || '—'}</div></div></div>
-        ${(t.comments || []).map((c) => html`<div class="list-item" style="align-items:flex-start">${avatar(emp[c.by] || { name: '?' }, 'sm')}<div class="grow"><strong>${personName(emp[c.by])}</strong> <span class="small muted">${fmt.stamp(c.at)}</span><div style="white-space:pre-wrap;margin-top:4px">${loc(c, 'text')}</div></div></div>`)}
-        <form id="reply" class="stack" style="gap:8px;margin-top:12px">${textarea('text', { rows: 3, placeholder: L('回复或补充说明…', 'Reply or add details…'), maxlength: 2000 })}
+        <div class="items-start list-item">${avatar(emp[t.requesterId] || { name: '?' }, 'sm')}<div class="grow"><strong>${personName(emp[t.requesterId])}</strong><div class="pre-wrap mt-1">${loc(t, 'detail') || '—'}</div></div></div>
+        ${(t.comments || []).map((c) => html`<div class="items-start list-item">${avatar(emp[c.by] || { name: '?' }, 'sm')}<div class="grow"><strong>${personName(emp[c.by])}</strong> <span class="small muted">${fmt.stamp(c.at)}</span><div class="pre-wrap mt-1">${loc(c, 'text')}</div></div></div>`)}
+        <form id="reply" class="stack" style="gap:8px;margin-top:12px">${textarea('text', { rows: 3, placeholder: L('回复或补充说明…', 'Reply or add details…'), maxlength: 2000, ariaLabel: L('回复内容', 'Reply') })}
           <div class="row"><button class="btn btn-primary" type="submit">${L('发送', 'Send')}</button>${t.status !== 'resolved' ? html`<button class="btn" type="button" data-resolve>${icon('check')}${L('回复并标记解决', 'Reply and resolve')}</button>` : ''}</div></form></section>
       <section class="card"><div class="card-head"><h2>${L('处理信息', 'Handling')}</h2></div>
         <dl class="kv"><dt>${L('时限', 'Due')}</dt><dd>${fmt.date(due)} ${t.status !== 'resolved' && isOverdue(t, T) ? badge(L('已超时', 'Overdue'), 'danger') : ''}</dd><dt>SLA</dt><dd>${L(`${TICKET_TYPES[t.type]?.sla} 个工作日`, `${TICKET_TYPES[t.type]?.sla} working days`)}</dd>${t.resolvedAt ? html`<dt>${L('解决于', 'Resolved')}</dt><dd>${fmt.date(t.resolvedAt)}</dd>` : ''}</dl>
-        <div class="stack" style="gap:10px;margin-top:12px">
+        <div class="gap-3 mt-3 stack">
           ${field(L('处理人', 'Owner'), select('assignee', hr.map((x) => [x.id, personName(x)]), { value: t.assigneeId, placeholder: L('未分配', 'Unassigned'), id: 'assignee' }))}
           ${field(L('状态', 'Status'), select('status', Object.entries(TICKET_STATUS).map(([k, v]) => [k, tx(v.name)]), { value: t.status, id: 'status' }))}
         </div>
-        <div style="margin-top:12px">${method(L('提示：', 'Tip:'), L('常见问题可沉淀到制度百科，让其中的 HR 助手自动回答。', 'Turn frequent questions into policy articles so the assistant there can answer them.'))}</div></section>
+        <div class="mt-3">${method(L('提示：', 'Tip:'), L('常见问题可沉淀到制度百科，让其中的 HR 助手自动回答。', 'Turn frequent questions into policy articles so the assistant there can answer them.'))}</div></section>
     </div>`);
   const save = (patch, msg) => act(null, () => api.put(`/api/tickets/${t.id}`, patch), msg).then(() => ctx.rerender());
   el.querySelector('#assignee').addEventListener('change', (e) => save({ assigneeId: e.target.value || null, ...(t.status === 'open' && e.target.value && { status: 'in_progress' }) }, L('已分配', 'Assigned')));
@@ -295,9 +295,9 @@ async function kbView(el, ctx) {
     if (!a) return setHTML(el, empty(L('文章不存在', 'Article not found'), '', 'alert'));
     const calcs = relatedCalculators(articleText(a));
     setHTML(el, html`<a href="#/service/kb" class="small">← ${L('制度百科与问答', 'Policies & Q&A')}</a>
-      <div class="split" style="margin-top:8px"><section class="card"><div class="card-head"><div><h2 style="font-size:19px">${loc(a, 'title')}</h2><p>${tx(KB_CATEGORIES[a.category] || ['', ''])} · ${L('更新于', 'Updated')} ${fmt.date(a.updatedAt)}</p></div><button class="btn btn-sm" type="button" data-edit>${icon('edit')}${L('编辑', 'Edit')}</button></div>
+      <div class="mt-2 split"><section class="card"><div class="card-head"><div><h2 class="title-sm">${loc(a, 'title')}</h2><p>${tx(KB_CATEGORIES[a.category] || ['', ''])} · ${L('更新于', 'Updated')} ${fmt.date(a.updatedAt)}</p></div><button class="btn btn-sm" type="button" data-edit>${icon('edit')}${L('编辑', 'Edit')}</button></div>
         ${md(lang() === 'en' ? a.bodyEn : a.body)}
-        <div style="margin-top:12px">${(a.tags || []).map((t) => html`<span class="tag">${t}</span>`)}</div></section>
+        <div class="mt-3">${(a.tags || []).map((t) => html`<span class="tag">${t}</span>`)}</div></section>
         <div class="stack">
           ${calcs.length ? html`<section class="card"><div class="card-head"><div><h2>${L('算一算', 'Work it out')}</h2><p>${L('按本制度的规则计算具体数字', 'Get the number under these rules')}</p></div></div><div class="row">${calcs.map((c) => html`<a class="btn" href="#/toolkit/${c.key}">${icon('calc')}${tx(c.name)}</a>`)}</div></section>` : ''}
           <section class="card"><div class="card-head"><h2>${L('没找到答案？', 'Still have a question?')}</h2></div>
@@ -313,16 +313,16 @@ async function kbView(el, ctx) {
   const SUGGEST = [L('我今年有几天年假？', 'How many days of annual leave do I get?'), L('加班费怎么计算？', 'How is overtime pay calculated?'), L('试用期最长多久？', 'How long can probation be?'), L('怎么开在职证明？', 'How do I get an employment letter?'), L('离职要提前多久通知？', 'How much notice do I need to give?'), L('产假有多少天？', 'How long is maternity leave?')];
   // One box does both jobs: typing filters the articles below, Enter asks the assistant.
   setHTML(el, html`
-    <section class="card" style="margin-bottom:16px">
+    <section class="mb-4 card">
       <div class="card-head"><div><h2>${L('搜索制度或直接提问', 'Search the policies or ask a question')}</h2><p>${aiEnabled()
         ? L('输入关键词即时筛选下方文章；按回车或“提问”，由 Claude 仅依据检索到的制度作答并标注出处，不编造规定。', 'Typing filters the articles below. Press Enter or Ask and Claude answers only from the matching policies, citing them.')
         : L('输入关键词即时筛选下方文章；按回车或“提问”，给出最相关的条款原文与出处（配置 AI 后可获得更自然的回答）。', 'Typing filters the articles below. Press Enter or Ask for the most relevant passage and its source (configure AI for conversational answers).')}</p></div>${badge(aiEnabled() ? 'AI' : L('检索模式', 'Search mode'), aiEnabled() ? 'info' : '')}</div>
-      <form id="ask" class="row"><input class="input" type="search" name="q" value="${ctx.query.q || ''}" placeholder="${L('如：年假怎么算、加班费、试用期', 'e.g. annual leave, overtime pay, probation')}" style="flex:1" maxlength="500" autocomplete="off" aria-label="${L('搜索制度或提问', 'Search or ask')}"><button class="btn btn-primary" type="submit">${icon('send')}${L('提问', 'Ask')}</button></form>
-      <div class="chips-input" style="margin-top:10px">${SUGGEST.map((s) => html`<button type="button" class="chip-toggle" data-q="${s}">${s}</button>`)}</div>
-      <div class="chat" id="chat" aria-live="polite" style="margin-top:12px" ${chatLog.length ? '' : 'hidden'}></div>
-      <div class="row" id="chat-foot" style="margin-top:8px" ${chatLog.length ? '' : 'hidden'}><span class="small muted grow">${L('找不到答案时，可一键转为服务申请交给 HR。', 'When nothing matches, turn the question into a request for HR in one click.')}</span><button class="btn btn-sm" type="button" data-clear>${L('清空对话', 'Clear conversation')}</button></div>
+      <form id="ask" class="row"><input class="grow input" type="search" name="q" value="${ctx.query.q || ''}" placeholder="${L('如：年假怎么算、加班费、试用期', 'e.g. annual leave, overtime pay, probation')}" maxlength="500" autocomplete="off" aria-label="${L('搜索制度或提问', 'Search or ask')}"><button class="btn btn-primary" type="submit">${icon('send')}${L('提问', 'Ask')}</button></form>
+      <div class="mt-3 chips-input">${SUGGEST.map((s) => html`<button type="button" class="chip-toggle" data-q="${s}">${s}</button>`)}</div>
+      <div class="mt-3 chat" id="chat" aria-live="polite" ${chatLog.length ? '' : 'hidden'}></div>
+      <div class="mt-2 row" id="chat-foot" ${chatLog.length ? '' : 'hidden'}><span class="small muted grow">${L('找不到答案时，可一键转为服务申请交给 HR。', 'When nothing matches, turn the question into a request for HR in one click.')}</span><button class="btn btn-sm" type="button" data-clear>${L('清空对话', 'Clear conversation')}</button></div>
     </section>
-    <div class="row-between" style="margin-bottom:12px">
+    <div class="mb-3 row-between">
       <div class="seg"><button type="button" class="${!cat ? 'on' : ''}" data-cat="">${L('全部', 'All')}</button>${Object.entries(KB_CATEGORIES).map(([k, v]) => html`<button type="button" class="${cat === k ? 'on' : ''}" data-cat="${k}">${tx(v)}</button>`)}</div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建文章', 'New article')}</button></div>
     <div id="kb-list"></div>`);
@@ -332,7 +332,7 @@ async function kbView(el, ctx) {
   const drawList = (q) => {
     let rows = d.kb.filter((a) => !cat || a.category === cat);
     if (q.trim()) rows = searchKB(rows, q).map((r) => r.article);
-    setHTML(listEl, html`<div class="grid cols-3">${rows.map((a) => html`<a class="card tool-card" href="#/service/kb/${a.id}"><span class="badge" style="width:max-content">${tx(KB_CATEGORIES[a.category] || ['', ''])}</span><strong>${loc(a, 'title')}</strong><p>${(lang() === 'en' ? a.bodyEn : a.body).slice(0, 80).replace(/\n/g, ' ')}…</p></a>`)}</div>
+    setHTML(listEl, html`<div class="grid cols-3">${rows.map((a) => html`<a class="card tool-card" href="#/service/kb/${a.id}"><span class="w-max badge">${tx(KB_CATEGORIES[a.category] || ['', ''])}</span><strong>${loc(a, 'title')}</strong><p>${(lang() === 'en' ? a.bodyEn : a.body).slice(0, 80).replace(/\n/g, ' ')}…</p></a>`)}</div>
       ${rows.length ? '' : empty(L('没有找到相关制度', 'No matching policies'), L('换个关键词，或按回车提问。', 'Try other words, or press Enter to ask.'), 'search')}`);
   };
   // Keep the filter in the address without re-rendering (which would lose focus and the conversation).
@@ -435,14 +435,14 @@ async function onboardingView(el, ctx) {
       || task.owner === 'buddy' && ob.buddyId === getActor() || task.owner === 'manager' && hasRole('manager') && e.managerId === getActor();
     const done = ob.tasks.filter((t) => t.done).length;
     setHTML(el, html`
-      <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(e, 'md')}<div><a href="#/service/onboarding" class="small">← ${L('入职管理', 'Onboarding')}</a><h2 style="font-size:19px">${personName(e)} · ${L('入职计划', 'Onboarding plan')}</h2>
+      <div class="mb-3 row-between"><div class="row">${avatar(e, 'md')}<div><a href="#/service/onboarding" class="small">← ${L('入职管理', 'Onboarding')}</a><h2 class="title-sm">${personName(e)} · ${L('入职计划', 'Onboarding plan')}</h2>
         <div class="small muted">${loc(e, 'title')} · ${L('入职日期', 'Start date')} ${fmt.date(ob.startDate)}${ob.buddyId ? ` · ${L('入职导师', 'Buddy')} ${personName(emp[ob.buddyId])}` : ''}</div></div></div>
-        <div class="row" style="min-width:220px"><div style="flex:1">${meter(done, ob.tasks.length, 'ok')}</div><strong>${done}/${ob.tasks.length}</strong></div></div>
+        <div class="min-w-220 row"><div class="grow">${meter(done, ob.tasks.length, 'ok')}</div><strong>${done}/${ob.tasks.length}</strong></div></div>
       <div class="grid cols-3">${Object.entries(PHASES).map(([p, name]) => {
         const ts = ob.tasks.filter((t) => t.phase === p);
         if (!ts.length) return '';
         return html`<section class="card"><div class="card-head"><h2>${tx(name)}</h2><span class="badge">${ts.filter((t) => t.done).length}/${ts.length}</span></div>
-          ${ts.map((t) => html`<label class="list-item check" style="align-items:flex-start"><input type="checkbox" data-task="${t.id}" ${t.done ? 'checked' : ''} ${canComplete(t) ? '' : 'disabled'}><span class="grow"><span style="${t.done ? 'text-decoration:line-through;color:var(--text-3)' : ''}">${tx(t.text)}</span><span class="meta" style="display:block">${tx(OWNERS[t.owner])} · ${fmt.date(t.due)} ${!t.done && t.due < T ? badge(L('逾期', 'Overdue'), 'danger') : ''}</span></span></label>`)}</section>`;
+          ${ts.map((t) => html`<label class="items-start list-item check"><input type="checkbox" data-task="${t.id}" ${t.done ? 'checked' : ''} ${canComplete(t) ? '' : 'disabled'}><span class="grow"><span class="${t.done ? 'done-text' : ''}">${tx(t.text)}</span><span class="d-block meta">${tx(OWNERS[t.owner])} · ${fmt.date(t.due)} ${!t.done && t.due < T ? badge(L('逾期', 'Overdue'), 'danger') : ''}</span></span></label>`)}</section>`;
       })}</div>`);
     on(el, 'change', '[data-task]', async (e, cb) => {
       const tasks = ob.tasks.map((t) => (t.id === cb.dataset.task ? { ...t, done: cb.checked } : t));
@@ -457,14 +457,14 @@ async function onboardingView(el, ctx) {
   const plans = d.onboarding.filter((ob) => f === 'all' || (f === 'done') === complete(ob)).sort((a, b) => b.startDate.localeCompare(a.startDate));
   setHTML(el, html`
     ${method(L('30-60-90 天融入：', '30-60-90 day onboarding:'), L('清单按入职前、第一天、第一周、30/60/90 天分阶段，分别指派给 HR、上级、IT、导师和新员工本人。在“智能招聘”中录用候选人时会自动生成计划。', 'Checklists run from before day one to 90 days, with tasks for HR, the manager, IT, the buddy and the new hire. Hiring a candidate in Recruitment creates the plan automatically.'))}
-    <div class="row-between" style="margin:12px 0">
+    <div class="my-3 row-between">
       <div class="seg">${[['active', L('进行中', 'In progress'), d.onboarding.filter((ob) => !complete(ob)).length], ['done', L('已完成', 'Completed'), d.onboarding.filter(complete).length], ['all', L('全部', 'All'), d.onboarding.length]].map(([k, n, c]) => html`<button type="button" class="${f === k ? 'on' : ''}" data-f="${k}">${n} ${c}</button>`)}</div>
       <button class="btn btn-primary" type="button" data-new>${icon('plus')}${L('新建入职计划', 'New plan')}</button></div>
     <section class="card card-flush">${plans.length ? html`<div class="table-wrap"><table class="table"><thead><tr><th>${L('新员工', 'New hire')}</th><th>${L('入职日期', 'Start')}</th><th>${L('进度', 'Progress')}</th><th>${L('逾期任务', 'Overdue')}</th></tr></thead>
       <tbody>${plans.map((ob) => {
         const done = ob.tasks.filter((t) => t.done).length;
         const late = ob.tasks.filter((t) => !t.done && t.due < T).length;
-        return html`<tr class="clickable" data-href="#/service/onboarding/${ob.id}"><td>${personLink(emp[ob.employeeId])}</td><td>${fmt.date(ob.startDate)}</td><td style="min-width:160px"><div class="row" style="flex-wrap:nowrap"><div style="flex:1">${meter(done, ob.tasks.length, 'ok')}</div><span class="small">${done}/${ob.tasks.length}</span></div></td><td>${late ? badge(late, 'danger') : badge(0, 'ok')}</td></tr>`;
+        return html`<tr class="clickable" tabindex="0" data-href="#/service/onboarding/${ob.id}"><td>${personLink(emp[ob.employeeId])}</td><td>${fmt.date(ob.startDate)}</td><td class="min-w-160"><div class="flex-nowrap row"><div class="grow">${meter(done, ob.tasks.length, 'ok')}</div><span class="small">${done}/${ob.tasks.length}</span></div></td><td>${late ? badge(late, 'danger') : badge(0, 'ok')}</td></tr>`;
       })}</tbody></table></div>` : empty(d.onboarding.length ? L('没有符合条件的入职计划', 'No plans in this view') : L('还没有入职计划', 'No onboarding plans'), '', 'user')}</section>`);
   on(el, 'click', '[data-f]', (e, b) => { location.hash = `#/service/onboarding${b.dataset.f === 'active' ? '' : `?f=${b.dataset.f}`}`; });
   on(el, 'click', 'tr[data-href]', (e, tr) => { if (!e.target.closest('a')) location.hash = tr.dataset.href; });
