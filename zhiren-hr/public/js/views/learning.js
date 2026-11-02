@@ -7,7 +7,7 @@ import {
 } from '../core.js';
 import { L, tx, loc, ENROLL_STATUS } from '../i18n.js';
 import { COMPETENCIES, COMP_KEYS, compByKey, targetProfile, gaps, nextLevel, assessCompetencies } from '../engine/competency.js';
-import { ACTION_TYPES, buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
+import { ACTION_TYPES, IDP_STATUS, activeDevelopmentPlan, buildIDP, idpProgress, tna, learningStats, evaluateProgram, FORMATS } from '../engine/learning.js';
 import { radar, heatmap, seqColor, hbars } from '../charts.js';
 import { mountReport } from '../ai.js';
 
@@ -77,26 +77,22 @@ function planBlocks(focus, courses, { editable = false } = {}) {
 async function idpNew(el, ctx, d) {
   const emp = d.active.find((e) => e.id === ctx.query.emp);
   if (!emp) return setHTML(el, empty(L('员工不存在', 'Employee not found'), '', 'alert'));
+  if (!canEditPlan({ employeeId: emp.id })) return setHTML(el, empty(L('发展计划由上级或 HR 制定', 'Development plans are set by your manager or HR'), '', 'shield'));
+  // Links from the talent review and profiles land here, so an existing plan must not be duplicated.
+  const current = activeDevelopmentPlan(d.idps, emp.id);
+  if (current) {
+    return setHTML(el, html`<a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a>
+      <section class="card" style="margin-top:8px">${callout('info', L(`${personName(emp)} 已有一份进行中的发展计划，可以直接在原计划上修改。`, `${personName(emp)} already has an active plan; change that one instead.`))}
+        <div class="row" style="margin-top:12px"><a class="btn btn-primary" href="#/learning/idp/${current.id}">${L('查看计划', 'Open plan')}</a><a class="btn" href="#/learning/idp/${current.id}?edit=1">${icon('edit')}${L('编辑计划', 'Edit plan')}</a></div></section>`);
+  }
   const plan = buildIDP(emp, d.courses, today());
   if (plan.mode === 'unassessed') {
     return setHTML(el, html`<a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a>
       <section class="card" style="margin-top:8px">${callout('info', L(`${personName(emp)} 还没有完整的能力评估。发展计划要基于真实的能力差距，请先完成评估。`, `${personName(emp)} has no complete competency assessment. A development plan needs real gaps, so assess first.`))}
         <a class="btn btn-primary" style="margin-top:12px" href="#/talent/competency?emp=${emp.id}">${L('去完成能力评估', 'Assess competencies')}</a></section>`);
   }
-  const target = targetProfile(plan.mode === 'gap' ? emp.level : nextLevel(emp.level));
-  setHTML(el, html`
-    <div class="row-between" style="margin-bottom:12px"><div class="row">${avatar(emp, 'md')}<div><a href="#/learning/idp" class="small">← ${L('全部计划', 'All plans')}</a><h2 style="font-size:19px">${L('新建发展计划', 'New development plan')} · ${personName(emp)}</h2><div class="small muted">${loc(emp, 'title')} · ${emp.level}</div></div></div>
-      <button class="btn btn-primary" type="button" data-save>${icon('check')}${L('保存计划', 'Save plan')}</button></div>
-    ${callout('brand', plan.mode === 'gap' ? L('已识别当前职级的能力差距，计划聚焦补齐差距。', 'Gaps against the current level found; the plan focuses on closing them.') : plan.mode === 'growth' ? L(`已达到 ${emp.level} 的要求，计划按更高职级段（${nextLevel(emp.level)}）的标准准备发展。`, `Meets ${emp.level}; the plan prepares for the next level band (${nextLevel(emp.level)}).`) : L('已达到最高要求，计划聚焦优势精进。', 'At the top of the profile; the plan deepens strengths.'))}
-    <div class="split" style="margin-top:12px">
-      <div class="stack">${planBlocks(plan.focus, d.courses)}</div>
-      <section class="card"><div class="card-head"><h2>${L('能力对照', 'Profile vs target')}</h2></div>
-        ${radar({ axes: COMPETENCIES.map((c) => ({ key: c.key, label: tx(c.name) })), series: [{ name: L('当前', 'Current'), values: emp.competencies || {}, cls: 's1' }, { name: L('目标', 'Target'), values: target, cls: 's2' }], size: 300 })}</section>
-    </div>`);
-  on(el, 'click', '[data-save]', async (e, b) => {
-    const saved = await act(b, () => api.post('/api/idps', { employeeId: emp.id, period: String(new Date().getFullYear()), status: 'active', mode: plan.mode, focus: plan.focus, name: emp.name, nameEn: emp.nameEn }), L('发展计划已保存', 'Plan saved'));
-    if (saved) location.hash = `#/learning/idp/${saved.id}`;
-  });
+  const intro = callout('brand', plan.mode === 'gap' ? L('已识别当前职级的能力差距，计划聚焦补齐差距。', 'Gaps against the current level found; the plan focuses on closing them.') : plan.mode === 'growth' ? L(`已达到 ${emp.level} 的要求，计划按更高职级段（${nextLevel(emp.level)}）的标准准备发展。`, `Meets ${emp.level}; the plan prepares for the next level band (${nextLevel(emp.level)}).`) : plan.focus.length ? L('已达到最高要求，计划聚焦优势精进。', 'At the top of the profile; the plan deepens strengths.') : L('所有能力都已是最高等级，系统没有可生成的内容。如需计划，请手动添加发展重点。', 'Every competency is at the top level, so nothing was generated. Add a focus area by hand if a plan is still needed.'));
+  idpEditor(el, { plan, emp, courses: d.courses, people: d.active, intro, cancelHref: '#/learning/idp', onSaved: (saved) => { location.hash = `#/learning/idp/${saved.id}`; } });
 }
 
 async function idpDetail(el, ctx, d) {
