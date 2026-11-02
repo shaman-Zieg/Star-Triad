@@ -95,6 +95,52 @@ export function buildIDP(emp, courses = COURSE_CATALOG, startDate) {
   return { mode, focus };
 }
 
+export const IDP_STATUS = {
+  active: { name: ['进行中', 'Active'], tone: 'info' },
+  completed: { name: ['已完成', 'Completed'], tone: 'ok' },
+  cancelled: { name: ['已取消', 'Cancelled'], tone: '' },
+};
+
+// The plan someone is working on now. Retention plans are a separate record and finished plans stay as history.
+export const activeDevelopmentPlan = (idps, employeeId) => (idps || []).find((p) => p.employeeId === employeeId && p.mode !== 'retention' && p.status === 'active') || null;
+
+// Starting values for a competency added by hand: the assessed level when there is one, and one level up.
+export function newFocusArea(competency, emp, due) {
+  const actual = Number(emp?.competencies?.[competency]) || 1;
+  const target = Math.max(Number(targetProfile(emp?.level)[competency]) || 0, Math.min(5, actual + 1));
+  return { competency, actual, target, actions: [newAction('70', due)] };
+}
+export const newAction = (type, due) => ({ type, text: ['', ''], due, done: false });
+
+// Share of actions per 70-20-10 type, rounded, for the mix shown while editing.
+export function idpMix(focus) {
+  const all = (focus || []).flatMap((f) => f.actions || []);
+  return ['70', '20', '10'].map((type) => {
+    const count = all.filter((a) => a.type === type).length;
+    return { type, count, share: all.length ? Math.round((count / all.length) * 100) : 0 };
+  });
+}
+
+// Problems that would stop a plan being saved, as [zh, en] messages the editor can show in place.
+export function idpDraftErrors(draft) {
+  const errors = [];
+  const add = (where, zh, en) => errors.push({ where, text: [zh, en] });
+  const focus = draft.focus || [];
+  if (!focus.length) add(null, '请至少保留一个发展重点。', 'Keep at least one focus area.');
+  const seen = new Set();
+  focus.forEach((f, fi) => {
+    if (seen.has(f.competency)) add(`focus-${fi}`, `发展重点 ${fi + 1} 与前面的能力重复。`, `Focus area ${fi + 1} repeats a competency.`);
+    seen.add(f.competency);
+    if (f.target < f.actual) add(`focus-${fi}`, `发展重点 ${fi + 1} 的目标等级不能低于当前等级。`, `Focus area ${fi + 1}: the target cannot be below the current level.`);
+    if (!f.actions.length) add(`focus-${fi}`, `发展重点 ${fi + 1} 至少需要一项行动。`, `Focus area ${fi + 1} needs at least one action.`);
+    f.actions.forEach((a, ai) => {
+      if (!a.courseId && !String(a.text?.[0] ?? '').trim()) add(`action-${fi}-${ai}`, `发展重点 ${fi + 1} 的第 ${ai + 1} 项行动缺少内容。`, `Focus area ${fi + 1}, action ${ai + 1} has no description.`);
+      if (!a.due) add(`action-${fi}-${ai}`, `发展重点 ${fi + 1} 的第 ${ai + 1} 项行动缺少截止日期。`, `Focus area ${fi + 1}, action ${ai + 1} has no due date.`);
+    });
+  });
+  return errors;
+}
+
 export function idpProgress(idp) {
   const all = (idp.focus || []).flatMap((f) => f.actions);
   return all.length ? Math.round((all.filter((a) => a.done).length / all.length) * 100) : 0;
